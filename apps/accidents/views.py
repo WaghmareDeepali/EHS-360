@@ -1550,10 +1550,11 @@ class ExportIncidentsExcelView(LoginRequiredMixin, View):
 
         # --- Headers ---
         headers = [
-            'Report Number', 'Incident Type', 'Status', 'Incident Date', 'Incident Time',
+            'Report Number', 'Incident Type', 'Status', 'Incident Date', 'Incident Time', 
             'Plant', 'Zone', 'Location', 'Sub-Location', 'Description', 'Affected Person',
-            'Nature of Injury', 'Reported By', 'Reported Date', 'Investigation Deadline',
-            'Closure Date', 'Closed By'
+            'Employment Category', 'Department', 'Gender', 'Body Parts Affected', 'Nature of Injury',
+            'Unsafe Acts', 'Unsafe Conditions', 'Action Plan', 'Investigation Report Details', 'Reported By', 'Reported Date',
+            'Investigation Deadline', 'Closure Date', 'Closed By'
         ]
         sheet.append(headers)
 
@@ -1564,9 +1565,45 @@ class ExportIncidentsExcelView(LoginRequiredMixin, View):
 
         # --- Data Population and Styling ---
         desc_col_idx = headers.index('Description') + 1
+        body_part_col_idx = headers.index('Body Parts Affected') + 1
         injury_col_idx = headers.index('Nature of Injury') + 1
+        unsafe_act_col_idx = headers.index('Unsafe Acts') + 1
+        unsafe_condition_col_idx = headers.index('Unsafe Conditions') + 1
+        action_plan_col_idx = headers.index('Action Plan') + 1
+        investigation_col_idx = headers.index('Investigation Report Details') + 1
+
         
         for row_index, incident in enumerate(queryset, start=2):
+
+            try:
+                investigation = incident.investigation_report
+
+                investigation_details = (
+                    f"- Sequence of Events: {investigation.sequence_of_events or 'N/A'}\n"
+                    f"- Root Cause Analysis: {investigation.root_cause_analysis or 'N/A'}\n"
+                    f"- Immediate Corrective Actions: {investigation.immediate_corrective_actions or 'N/A'}\n"
+                    f"- Preventive Measures: {investigation.preventive_measures or 'N/A'}"
+                )
+
+            except Exception:
+                investigation_details = 'N/A'
+
+            try:
+                action_items = incident.action_items.all()
+                if action_items.exists():
+                    action_plan_details = "\n\n".join([
+                        f"- Action Taken: {action.action_description if action.action_description else 'N/A'}\n"
+                        f"- Responsible Person Emails: {', '.join([user.email for user in action.responsible_person.all()]) if action.responsible_person.exists() else 'No person assigned'}\n"
+                        f"- Target Date: {action.target_date.strftime('%d/%m/%Y') if action.target_date else 'N/A'}\n"
+                        f"- Status: {action.get_status_display()}"
+
+                        for action in action_items
+                    ])
+                else:
+                    action_plan_details = 'N/A'
+            except Exception:
+                action_plan_details = 'N/A'
+
             row_data = [
                 incident.report_number,
                 incident.incident_type.name if incident.incident_type else 'N/A',
@@ -1579,21 +1616,53 @@ class ExportIncidentsExcelView(LoginRequiredMixin, View):
                 incident.sublocation.name if incident.sublocation else 'N/A',
                 incident.description,
                 incident.affected_person_name,
+                dict(Incident.EMPLOYMENT_CATEGORY_CHOICES).get(
+                    incident.affected_employment_category,
+                    'N/A'
+                ),
+                incident.affected_person_department.name
+                if incident.affected_person_department else 'N/A',
+                dict(Incident.GENDER_CHOICES).get(
+                    incident.affected_gender,
+                    'N/A'
+                ),
+                ", ".join(incident.affected_body_parts)
+                if incident.affected_body_parts else 'N/A',
                 incident.nature_of_injury,
-                incident.reported_by.get_full_name() if incident.reported_by else 'N/A',
-                incident.reported_date.strftime("%Y-%m-%d %H:%M") if incident.reported_date else None,
+                ", ".join(incident.unsafe_acts)
+                if incident.unsafe_acts else 'N/A',
+                ", ".join(incident.unsafe_conditions)
+                if incident.unsafe_conditions else 'N/A',
+
+                action_plan_details,
+
+                investigation_details,
+                incident.reported_by.get_full_name()
+                if incident.reported_by else 'N/A',
+                incident.reported_date.strftime("%Y-%m-%d %H:%M")
+                if incident.reported_date else None,
                 incident.investigation_deadline,
-                incident.closure_date.strftime("%Y-%m-%d %H:%M") if incident.closure_date else None,
-                incident.closed_by.get_full_name() if incident.closed_by else 'N/A'
+                incident.closure_date.strftime("%Y-%m-%d %H:%M")
+                if incident.closure_date else None,
+                incident.closed_by.get_full_name()
+                if incident.closed_by else 'N/A'
+
+                
             ]
             sheet.append(row_data)
 
             current_fill = row_fills[(row_index - 2) % 2]
             for cell in sheet[row_index]:
                 cell.fill = current_fill
+                cell.alignment = Alignment(horizontal='left',vertical='top', wrap_text=True )
             
-            sheet.cell(row=row_index, column=desc_col_idx).alignment = wrap_alignment
-            sheet.cell(row=row_index, column=injury_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=desc_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=body_part_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=injury_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=unsafe_act_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=unsafe_condition_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=action_plan_col_idx).alignment = wrap_alignment
+            # sheet.cell(row=row_index, column=investigation_col_idx).alignment = Alignment(wrap_text=True,vertical='top', horizontal='left')
 
         # --- Conditional Formatting for Status Column ---
         if sheet.max_row >= 2:
@@ -1611,7 +1680,7 @@ class ExportIncidentsExcelView(LoginRequiredMixin, View):
 
         for col_letter, width in column_widths.items():
             header_name = sheet[f'{col_letter}1'].value
-            if header_name in ['Description', 'Nature of Injury']:
+            if header_name in [ 'Description', 'Nature of Injury', 'Body Parts Affected', 'Unsafe Acts', 'Unsafe Conditions', 'Action Plan','Investigation Report Details',]:
                 sheet.column_dimensions[col_letter].width = 50
             else:
                 sheet.column_dimensions[col_letter].width = width + 5 # Auto-size with padding
@@ -1626,6 +1695,8 @@ class ExportIncidentsExcelView(LoginRequiredMixin, View):
         workbook.save(response)
 
         return response    
+
+
 
 # class IncidentCloseView(LoginRequiredMixin, UpdateView):
 #     """Close an incident"""
