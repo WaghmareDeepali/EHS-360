@@ -974,6 +974,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         selected_severity = self.request.GET.get('severity', '')
         selected_status = self.request.GET.get('status', '')
         selected_overdue = self.request.GET.get('overdue', '')
+        selected_closed = self.request.GET.get('closed', '')
         selected_category = self.request.GET.get('category', '')    # <-- NEW
         selected_department = self.request.GET.get('department', '') # <-- NEW
 
@@ -990,13 +991,23 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             user_plants = Plant.objects.none()
 
         # 3. Calculate top-level stats BEFORE applying any filters.
-        context['total_hazards'] = base_hazards.count()
-        context['closed_hazards_count'] = base_hazards.filter(status__in=['RESOLVED', 'CLOSED']).count()
-        context['overdue_hazards_count'] = base_hazards.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED']).count()
-        this_month_total = base_hazards.filter(incident_datetime__year=today.year, incident_datetime__month=today.month).count()
+        # context['total_hazards'] = base_hazards.count()
+        # context['closed_hazards_count'] = base_hazards.filter(status__in=['RESOLVED', 'CLOSED']).count()
+        # context['overdue_hazards_count'] = base_hazards.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED']).count()
+        # this_month_total = base_hazards.filter(incident_datetime__year=today.year, incident_datetime__month=today.month).count()
+
 
         # 4. Apply filters to a new queryset for charts and lists.
         filtered_hazards = base_hazards
+        if selected_month:
+            try:
+                year, month = map(int, selected_month.split('-'))
+                filtered_hazards = filtered_hazards.filter(
+                    incident_datetime__year=year,
+                    incident_datetime__month=month
+                )
+            except (ValueError, TypeError):
+                pass
         if selected_plant:
             filtered_hazards = filtered_hazards.filter(plant_id=selected_plant)
         if selected_zone:
@@ -1024,6 +1035,9 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         if selected_overdue == 'true':
             filtered_hazards = filtered_hazards.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED'])
         
+        if selected_closed == 'true':
+            filtered_hazards = filtered_hazards.filter(status__in=['RESOLVED', 'CLOSED']
+                                                       )
         if selected_month:
             try:
                 year, month = map(int, selected_month.split('-'))
@@ -1031,8 +1045,35 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             except (ValueError, TypeError):
                 pass
         
-        context['this_month_hazards'] = filtered_hazards.count() if selected_month else this_month_total
-        context['current_month_value'] = today.strftime('%Y-%m')
+        # context['this_month_hazards'] = filtered_hazards.count() if selected_month else this_month_total
+        # context['current_month_value'] = today.strftime('%Y-%m')
+        context['current_month_value'] = selected_month if selected_month else today.strftime('%Y-%m')
+
+        # Dashboard cards should respect active filters
+
+        if today.month >= 4:  # Apr-Dec
+            fy_start = datetime.date(today.year, 4, 1)
+            fy_end = datetime.date(today.year + 1, 3, 31)
+        else:  # Jan-Mar
+            fy_start = datetime.date(today.year - 1, 4, 1)
+            fy_end = datetime.date(today.year, 3, 31)
+
+        context['total_hazards'] = base_hazards.filter(
+            incident_datetime__date__gte=fy_start,
+            incident_datetime__date__lte=fy_end
+        ).count()
+
+        context['closed_hazards_count'] = filtered_hazards.filter(
+            status__in=['RESOLVED', 'CLOSED']
+        ).count()
+
+        context['overdue_hazards_count'] = filtered_hazards.filter(
+            action_deadline__lt=today
+        ).exclude(
+            status__in=['RESOLVED', 'CLOSED']
+        ).count()
+
+        context['this_month_hazards'] = filtered_hazards.count()
 
         # 5. Prepare filter dropdown options
         context['plants'] = user_plants
@@ -1083,6 +1124,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             'selected_category': selected_category, # <-- NEW
             'selected_department': selected_department, # <-- NEW
             'selected_overdue': selected_overdue,
+            'selected_closed': selected_closed,
         })
         try:
             if selected_plant: context['selected_plant_name'] = Plant.objects.get(id=selected_plant).name
@@ -1098,7 +1140,27 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
              pass
         context['has_active_filters'] = any(context.get(key) for key in ['selected_plant', 'selected_zone', 'selected_location', 'selected_sublocation', 'selected_month', 'selected_severity', 'selected_status', 'selected_category', 'selected_department', 'selected_overdue'])
         # 6. Prepare data for lists and charts using the FILTERED queryset
-        context['recent_hazards'] = filtered_hazards.select_related('plant', 'location').order_by('-incident_datetime')[:10]
+        # context['recent_hazards'] = filtered_hazards.select_related('plant', 'location').order_by('-incident_datetime')[:10]
+
+        from django.core.paginator import Paginator
+
+        hazards_qs = filtered_hazards.select_related('plant', 'location').order_by('-incident_datetime')
+
+        paginator = Paginator(hazards_qs, 10)  # 10 per page
+        page_number = self.request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        context['page_obj'] = page_obj
+        context['is_paginated'] = page_obj.has_other_pages()
+        context['recent_hazards'] = page_obj.object_list
+
+        from urllib.parse import urlencode
+
+        querydict = self.request.GET.copy()
+        querydict.pop('page', None)
+
+        context['querystring'] = urlencode(querydict)
+        context['current_filters'] = querydict.urlencode()
 
         # --- PIE CHART DATA ---
         top_categories_query = filtered_hazards.values('hazard_category').annotate(count=Count('hazard_category')).order_by('-count')[:3]

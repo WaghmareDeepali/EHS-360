@@ -457,10 +457,16 @@ class PlantMonthlyEntryView(LoginRequiredMixin, View):
         current_year = today.year
 
         current_month = today.strftime("%b").upper()
+        from calendar import month_abbr
+
+        current_month_num = today.month
+        prev_month_num = current_month_num - 1 if current_month_num > 1 else 12
+        previous_month = month_abbr[prev_month_num].upper()
+
         current_day = today.day
 
         is_admin = request.user.is_superuser or request.user.is_staff or getattr(request.user, 'is_admin_user', False)
-        FREEZE_DAY = 7
+        FREEZE_DAY = 10
 
         # If current month is Jan–Mar → FY started last year
         if today.month < 4:
@@ -508,9 +514,20 @@ class PlantMonthlyEntryView(LoginRequiredMixin, View):
                 if is_admin:
                     is_editable = True
                 else:
-                    is_editable = (month_code == current_month and current_day <= FREEZE_DAY)
+                    is_editable = (month_code == previous_month and current_day <= FREEZE_DAY)
+                    # This for testing Freeze data "Monthly Testing and Date "
+                    # TEST_MODE = True
+
+                    # if TEST_MODE:
+                    #     current_month = "NOV"
+                    #     previous_month = "OCT"
+                    # else:
+                    #     current_month = today.strftime("%b").upper()
+                    #     prev_month_num = current_month_num - 1 if current_month_num > 1 else 12
+                    #     previous_month = month_abbr[prev_month_num].upper()
+                    # is_editable = (month_code == previous_month and current_day <= FREEZE_DAY)
                     # This for testing Freeze data
-                    # is_editable = (month_code == current_month and 9 <= current_day <= 16)
+                    # is_editable = (month_code == previous_month and 1 <= current_day <= 7)
                 month_key = month_code.lower()
                 value = ''
                 saved_unit_name = default_unit_name
@@ -592,8 +609,14 @@ class PlantMonthlyEntryView(LoginRequiredMixin, View):
         current_month = today.strftime("%b").upper()
         current_day = today.day
 
+        from calendar import month_abbr
+
+        current_month_num = today.month
+        prev_month_num = current_month_num - 1 if current_month_num > 1 else 12
+        previous_month = month_abbr[prev_month_num].upper()
+
         is_admin = request.user.is_superuser or request.user.is_staff or getattr(request.user, 'is_admin_user', False)
-        FREEZE_DAY = 7
+        FREEZE_DAY = 10
 
         # ✅ Replace MONTHS with FY order
         FY_MONTH_ORDER = [
@@ -614,7 +637,7 @@ class PlantMonthlyEntryView(LoginRequiredMixin, View):
             default_unit = q.default_unit  # fallback Unit object
             for month_code, month_name in MONTHS:
                 if not is_admin:
-                    if not (month_code == current_month and current_day <= FREEZE_DAY):
+                    if not (month_code == previous_month and current_day <= FREEZE_DAY):
                     # This for testing Freeze data
                     # if not (month_code == current_month and 9 <= current_day <= 16):
                         continue
@@ -1597,7 +1620,7 @@ class GetCategoryBaseUnitAPIView(LoginRequiredMixin, View):
             }, status=500)
 
 
-
+from calendar import month_name
 class EnvironmentalDashboardView(LoginRequiredMixin, TemplateView):
     """
     Environmental Dashboard with strict access control and dynamic filtering.
@@ -1633,11 +1656,38 @@ class EnvironmentalDashboardView(LoginRequiredMixin, TemplateView):
         # Optimization: select_related to avoid N+1 queries on SQLite
         data_qs = []
         current_year = datetime.now().year
-        month_choices = MonthlyIndicatorData.MONTH_CHOICES
+        # month_choices = MonthlyIndicatorData.MONTH_CHOICES
+
+        today = datetime.now()
+        # FY start year
+        if today.month < 4:
+            fy_start_year = today.year - 1
+        else:
+            fy_start_year = today.year
+
+        FY_MONTH_ORDER = [
+            "APR", "MAY", "JUN", "JUL", "AUG", "SEP",
+            "OCT", "NOV", "DEC", "JAN", "FEB", "MAR"
+        ]
+
+        month_choices = []
+
+        for m in FY_MONTH_ORDER:
+            month_num = datetime.strptime(m, "%b").month
+
+            # Jan–Mar → next year
+            if m in ["JAN", "FEB", "MAR"]:
+                year = fy_start_year + 1
+            else:
+                year = fy_start_year
+
+            label = f"{month_name[month_num]} {year}"  
+            month_choices.append((m, label))
+
         updated_at = None
         for plant in accessible_plants:
             for q in questions:
-                for month_code, month_name in month_choices:
+                for month_code, month_label in month_choices:
 
                     # Apply user-selected filters
                     if selected_month_code and month_code != selected_month_code:

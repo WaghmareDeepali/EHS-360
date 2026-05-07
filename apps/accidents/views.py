@@ -1144,11 +1144,15 @@ class IncidentAccidentDashboardView(LoginRequiredMixin, TemplateView):
         incident_types = IncidentType.objects.order_by('id')
         type_counts = incidents.values('incident_type__id').annotate(count=Count('id'))
         count_map = {item['incident_type__id']: item['count'] for item in type_counts}
-        severity_labels = [itype.name for itype in incident_types]
+        # severity_labels = [itype.name for itype in incident_types]
+        severity_labels = [itype.code for itype in incident_types]
         severity_data = [count_map.get(itype.id, 0) for itype in incident_types]
 
         context['severity_labels'] = json.dumps(severity_labels)
         context['severity_data'] = json.dumps(severity_data)
+
+        print("severity_data",severity_data)
+        print("severity_labels",severity_labels)
 
         status_distribution = incidents.values('status').annotate(count=Count('id')).order_by('-count')
         status_choices_dict = dict(Incident.STATUS_CHOICES)

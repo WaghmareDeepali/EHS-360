@@ -850,7 +850,8 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(severityCtx, {
             type: 'bar',
             data: {
-                labels: ['LTI', 'MTC/RWC', 'First Aid (FA)', 'HLFI', 'Fatality'],
+                // labels: ['LTI', 'MTC/RWC', 'First Aid (FA)', 'HLFI', 'Fatality'],
+                labels: {{ severity_labels|safe }},
                 datasets: [{
                     label: 'Incidents',
                     data: {{ severity_data|safe }},

@@ -136,6 +136,7 @@
                 {% if selected_severity %}<span class="active-filter-badge">Risk: {{ selected_severity|capfirst }}<i class="fas fa-times" onclick="removeFilter('severity')"></i></span>{% endif %}
                 {% if selected_status %}<span class="active-filter-badge">Status: {{ selected_status|capfirst }}<i class="fas fa-times" onclick="removeFilter('status')"></i></span>{% endif %}
                 {% if selected_overdue == 'true' %}<span class="active-filter-badge">Overdue<i class="fas fa-times" onclick="removeFilter('overdue')"></i></span>{% endif %}
+                {% if selected_closed == 'true' %}<span class="active-filter-badge">Closed Hazards<i class="fas fa-times" onclick="removeFilter('closed')"></i></span>{% endif %}
                 <a href="{% url 'hazards:hazard_dashboard' %}" class="btn btn-sm btn-outline-danger ml-2"><i class="fas fa-times-circle"></i> Clear All</a>
             </div>
         </div>
@@ -147,7 +148,7 @@
 <div class="row mb-4">
     <!-- Card 1: Total Hazards (links to full list) -->
     <div class="col-xl-3 col-md-6">
-        <a href="{% url 'hazards:hazard_list' %}" class="text-decoration-none">
+        <a href="{% url 'hazards:hazard_dashboard' %}?{{ current_filters }}" class="text-decoration-none">
             <div class="dashboard-card clickable-card">
                 <div class="stat-card primary">
                     <i class="fas fa-shield-alt stat-icon"></i>
@@ -160,7 +161,7 @@
 
     <!-- Card 2: Closed Hazards (links to filtered list view) -->
     <div class="col-xl-3 col-md-6">
-        <a href="{% url 'hazards:hazard_list' %}?status=RESOLVED" class="text-decoration-none">
+        <a href="{% url 'hazards:hazard_dashboard' %}?{{ current_filters }}&closed=true" class="text-decoration-none">
             <div class="dashboard-card clickable-card">
                 <div class="stat-card success">
                     <i class="fas fa-check-circle stat-icon"></i>
@@ -173,7 +174,7 @@
 
     <!-- Card 3: This Month's Hazards (links to filtered dashboard) -->
     <div class="col-xl-3 col-md-6">
-        <a href="{% url 'hazards:hazard_dashboard' %}?month={{ current_month_value }}" class="text-decoration-none">
+        <a href="{% url 'hazards:hazard_dashboard' %}?{{ current_filters }}" class="text-decoration-none">
             <div class="dashboard-card clickable-card">
                 <div class="stat-card warning">
                     <i class="fas fa-calendar-alt stat-icon"></i>
@@ -186,7 +187,7 @@
 
     <!-- Card 4: Overdue Hazards (links to filtered dashboard) -->
     <div class="col-xl-3 col-md-6">
-        <a href="{% url 'hazards:hazard_dashboard' %}?overdue=true" class="text-decoration-none">
+        <a href="{% url 'hazards:hazard_dashboard' %}?{{ current_filters }}&overdue=true" class="text-decoration-none">
             <div class="dashboard-card clickable-card">
                 <div class="stat-card danger">
                     <i class="fas fa-clock stat-icon"></i>
@@ -343,6 +344,7 @@
                     <table class="table table-hover hazard-table">
                         <thead>
                             <tr>
+                                <th>Sr No</th>
                                 <th>Report</th>
                                 <th>Title</th>
                                 <th>Type</th>
@@ -355,6 +357,9 @@
                         <tbody>
                             {% for hazard in recent_hazards %}
                             <tr>
+                                <td>
+                                    {{ page_obj.start_index|add:forloop.counter0 }}
+                                </td>
                                 <td><strong>{{ hazard.report_number }}</strong></td>
                                 <td>{{ hazard.hazard_title|truncatewords:5 }}</td>
                                 <td>{{ hazard.get_hazard_type_display }}</td>
@@ -381,7 +386,52 @@
                         </tbody>
                     </table>
                 </div>
-                {% if recent_hazards %}<div class="text-center mt-3"><a href="{% url 'hazards:hazard_list' %}" class="btn btn-outline-primary"><i class="fas fa-arrow-right mr-2"></i>View All Hazards</a></div>{% endif %}
+                {% comment %} {% if recent_hazards %}<div class="text-center mt-3">
+                    <a href="{% url 'hazards:hazard_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-right mr-2"></i>View All Hazards</a></div>{% endif %} {% endcomment %}
+
+                <!-- Pagination -->
+                {% if is_paginated %}
+                    <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if querystring %}&{{ querystring }}{% endif %}">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">
+                                <i class="fas fa-angle-left"></i> Previous
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        <li class="page-item active">
+                            <span class="page-link">
+                                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                            </span>
+                        </li>
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">
+                                Next <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring %}&{{ querystring }}{% endif %}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                    </ul>
+                    </nav>
+                {% endif %}
             </div>
         </div>
     </div>
