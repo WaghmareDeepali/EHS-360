@@ -44,7 +44,7 @@
         </div>
 
         <!-- Hazard Type Filter -->
-        <div class="col-md-2 mb-2">
+        <div class="col-md-3 mb-2">
           <select name="hazard_type" class="form-control">
             <option value="">All Types</option>
             {% for type_key, type_name in hazard_types %}
@@ -56,7 +56,7 @@
         </div>
 
         <!-- Risk Level Filter -->
-        <div class="col-md-2 mb-2">
+        <div class="col-md-3 mb-2">
           <select name="risk_level" class="form-control">
             <option value="">All Risk Levels</option>
             {% for risk_key, risk_name in risk_levels %}
@@ -77,6 +77,54 @@
             </option>
             {% endfor %}
           </select>
+        </div>
+
+        <!-- Assigned By Filter -->
+        <div class="col-md-3 mb-2">
+            <select name="assigned_by"
+                    id="assignedByFilter"
+                    class="form-control select2">
+
+                <option value="">Assigned By</option>
+
+                {% for user_obj in assigned_by_users %}
+
+                <option value="{{ user_obj.id }}"
+                    {% if selected_assigned_by == user_obj.id|stringformat:"s" %}
+                        selected
+                    {% endif %}>
+
+                    {% firstof user_obj.get_full_name user_obj.username %}
+
+                </option>
+
+                {% endfor %}
+
+            </select>
+        </div>
+
+        <!-- Assigned To Filter -->
+        <div class="col-md-3 mb-2">
+            <select name="assigned_to"
+                    id="assignedToFilter"
+                    class="form-control select2">
+
+                <option value="">Assigned To</option>
+
+                {% for user_obj in assigned_to_users %}
+
+                <option value="{{ user_obj.id }}"
+                    {% if selected_assigned_to == user_obj.id|stringformat:"s" %}
+                        selected
+                    {% endif %}>
+
+                    {% firstof user_obj.get_full_name user_obj.username %}
+
+                </option>
+
+                {% endfor %}
+
+            </select>
         </div>
 
         <!-- Filter Buttons -->
@@ -118,9 +166,13 @@
             <th>Date & Time</th>
             <th>Plant / Location</th>
             <th>Risk Level</th>
+            <th>Assigned By</th>
+            <th>Assigned To</th>
             <th>Status</th>
             {% if user.role.name != 'EMPLOYEE' %}
             <th>Actions</th>
+            {% else %}
+                <th></th>
             {% endif %}
           </tr>
         </thead>
@@ -178,6 +230,52 @@
               </span>
             </td>
 
+            <!-- Assigned By -->
+            <td>
+                {% if hazard.reported_by %}
+                    {{ hazard.reported_by.get_full_name|default:hazard.reported_by.username }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+
+            <!-- Assigned To -->
+            <td>
+
+                {% if hazard.action_items.exists %}
+
+                    {% for action_item in hazard.action_items.all %}
+
+                        <!-- Completed Users -->
+                        {% for user in action_item.completed_by_users.all %}
+
+                            <span class="badge badge-success mr-1 mb-1">
+                                <i class="fas fa-check-circle"></i>
+                                {% firstof user.get_full_name user.username %}
+                            </span>
+
+                        {% endfor %}
+
+                        <!-- Pending Users -->
+                        {% for user in action_item.get_pending_users %}
+
+                            <span class="badge badge-warning mr-1 mb-1">
+                                <i class="fas fa-clock"></i>
+                                {% firstof user.get_full_name user.username %}
+                            </span>
+
+                        {% endfor %}
+
+                    {% endfor %}
+
+                {% else %}
+
+                    <span class="text-muted">Not Assigned</span>
+
+                {% endif %}
+
+            </td>
+
             <!-- Workflow Status -->
             <td>
               <span class="badge {{ hazard.status_badge_class }}">
@@ -216,7 +314,7 @@
 
           {% empty %}
           <tr>
-            <td colspan="{% if user.role.name != 'EMPLOYEE' %}8{% else %}7{% endif %}" class="text-center">
+            <td colspan="{% if user.role.name != 'EMPLOYEE' %}10{% else %}9{% endif %}" class="text-center">
               <div class="alert alert-info mb-0">
                 <i class="fas fa-info-circle mr-2"></i>No hazards found matching your filters.
               </div>
@@ -311,5 +409,61 @@
 .table-hover tbody tr:hover {
   background-color: #f5f5f5;
 }
+
+/* Select2 Styling */
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-container .select2-selection--single {
+    height: calc(2.25rem + 2px) !important;
+    border: 1px solid #ced4da !important;
+    border-radius: .25rem !important;
+    padding: .375rem .75rem !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 34px !important;
+    color: #495057 !important;
+    padding-left: 0 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(2.25rem + 2px) !important;
+    right: 8px !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: #495057 !important;
+}
 </style>
+
+{% block extra_js %}
+
+<script>
+window.addEventListener('load', function () {
+
+    if (typeof jQuery !== 'undefined') {
+
+        $('#assignedByFilter').select2({
+            placeholder: "Assigned By",
+            allowClear: true,
+            width: '100%'
+        });
+
+        $('#assignedToFilter').select2({
+            placeholder: "Assigned To",
+            allowClear: true,
+            width: '100%'
+        });
+
+    } else {
+
+        console.log('jQuery not loaded');
+
+    }
+
+});
+</script>
+
+{% endblock %}
 {% endblock %}

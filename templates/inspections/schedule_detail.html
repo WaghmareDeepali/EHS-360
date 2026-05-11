@@ -86,28 +86,68 @@
                                 </tr>
                                 <tr>
                                     <th>Assigned By</th>
-                                    <td>{{ schedule.assigned_by.get_full_name }}</td>
+                                    <td>
+                                        {% if schedule.assigned_by %}
+                                            {% firstof schedule.assigned_by.get_full_name schedule.assigned_by.username %}
+                                        {% else %}
+                                            <span class="text-muted">
+                                                System Auto Scheduled
+                                            </span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 <tr>
-                                    <th>Plant</th>
-                                    <td>{{ schedule.plant.name }}</td>
+                                    <th>Plants</th>
+                                    <td>
+                                        {% for plant in schedule.assigned_to.assigned_plants.all %}
+                                            <span class="badge badge-primary mr-1">
+                                                {{ plant.name }}
+                                            </span>
+                                        {% empty %}
+                                            <span class="text-muted">No plants assigned</span>
+                                        {% endfor %}
+                                    </td>
                                 </tr>
-                                {% if schedule.zone %}
+                                {% if schedule.zones.all %}
                                 <tr>
-                                    <th>Zone</th>
-                                    <td>{{ schedule.zone.name }}</td>
+                                    <th>Zones</th>
+                                    <td>
+                                        {% for zone in schedule.assigned_to.assigned_zones.all %}
+                                            <span class="badge badge-info mr-1">
+                                                {{ zone.name }}
+                                            </span>
+                                        {% empty %}
+                                            <span class="text-muted">No zones assigned</span>
+                                        {% endfor %}
+                                    </td>
                                 </tr>
                                 {% endif %}
-                                {% if schedule.location %}
+                                {% if schedule.locations.all %}
                                 <tr>
-                                    <th>Location</th>
-                                    <td>{{ schedule.location.name }}</td>
+                                    <th>Locations</th>
+                                    <td>
+                                        {% for location in schedule.assigned_to.assigned_locations.all %}
+                                            <span class="badge badge-secondary mr-1">
+                                                {{ location.name }}
+                                            </span>
+                                        {% empty %}
+                                            <span class="text-muted">No locations assigned</span>
+                                        {% endfor %}
+                                    </td>
                                 </tr>
                                 {% endif %}
-                                {% if schedule.sublocation %}
+                                {% if schedule.sublocations.all %}
                                 <tr>
-                                    <th>Sub-Location</th>
-                                    <td>{{ schedule.sublocation.name }}</td>
+                                    <th>Sub-Locations</th>
+                                    <td>
+                                        {% for sublocation in schedule.assigned_to.assigned_sublocations.all %}
+                                            <span class="badge badge-dark mr-1">
+                                                {{ sublocation.name }}
+                                            </span>
+                                        {% empty %}
+                                            <span class="text-muted">No sub-locations assigned</span>
+                                        {% endfor %}
+                                    </td>
                                 </tr>
                                 {% endif %}
                                 {% if schedule.department %}
@@ -123,10 +163,23 @@
                                 <tr>
                                     <th>Due Date</th>
                                     <td>
-                                        {{ schedule.due_date|date:"d M Y" }}
-                                        {% if schedule.is_overdue %}
-                                        <span class="badge badge-danger ml-2">Overdue</span>
+
+                                        {% if schedule.template.inspection_type == 'DAILY' %}
+
+                                            {{ schedule.scheduled_date|date:"d M Y" }}
+
+                                        {% else %}
+
+                                            {{ schedule.due_date|date:"d M Y" }}
+
                                         {% endif %}
+
+                                        {% if schedule.is_overdue %}
+                                            <span class="badge badge-danger ml-2">
+                                                Overdue
+                                            </span>
+                                        {% endif %}
+
                                     </td>
                                 </tr>
                                 {% if schedule.assignment_notes %}
@@ -138,6 +191,15 @@
                                 <tr>
                                     <th>Created</th>
                                     <td>{{ schedule.created_at|date:"d M Y H:i" }}</td>
+                                </tr>
+                                <tr>
+                                    <th>End Date</th>
+                                    <td>
+                                        {{ schedule.due_date|date:"d M Y" }}
+                                        {% if schedule.is_overdue %}
+                                        <span class="badge badge-danger ml-2">Overdue</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% if schedule.started_at %}
                                 <tr>
@@ -215,12 +277,167 @@
                         </ul>
                     </div>
                 </div>
+
+                <!-- Next Inspection Preview  -->
+                {% if schedule.auto_schedule_config %}
+                    <div class="ehs-card mt-3">
+
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="fas fa-calendar-alt text-primary"></i>
+                                Next Inspection Preview
+                            </h3>
+                        </div>
+
+                        <div class="card-body">
+
+                            <div class="alert alert-info mb-2">
+
+                                <div class="mb-2">
+                                    <strong>Inspection Type:</strong>
+                                    {{ schedule.template.get_inspection_type_display }}
+                                </div>
+
+                                <div class="mb-2">
+                                    <strong>Next Start Date:</strong>
+                                    <span id="detailPreviewStartDate">-</span>
+                                </div>
+
+                                <div>
+                                    <strong>Next Due Date:</strong>
+                                    <span id="detailPreviewDueDate">-</span>
+                                </div>
+
+                            </div>
+
+                            <div class="text-danger small font-weight-bold"
+                                id="detailInspectionPreviewNote">
+                            </div>
+
+                        </div>
+
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 {% block extra_js %}
+<script>
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    {% if schedule.auto_schedule_config %}
+
+    var inspectionType = "{{ schedule.template.inspection_type }}";
+
+    var offset =
+        {{ schedule.auto_schedule_config.due_date_offset_days|default:1 }};
+
+    var now = new Date();
+
+    var startDate = new Date(now);
+
+    // DAILY
+    if (inspectionType === 'DAILY') {
+
+        startDate.setDate(now.getDate() + 1);
+
+        // Skip Sunday
+        if (startDate.getDay() === 0) {
+            startDate.setDate(startDate.getDate() + 1);
+        }
+    }
+
+    // WEEKLY
+    else if (inspectionType === 'WEEKLY') {
+
+        var day = now.getDay();
+
+        var daysUntilMonday = (8 - day) % 7;
+
+        if (daysUntilMonday === 0) {
+            daysUntilMonday = 7;
+        }
+
+        startDate.setDate(
+            now.getDate() + daysUntilMonday
+        );
+    }
+
+    // MONTHLY
+    else if (inspectionType === 'MONTHLY') {
+
+        startDate = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            1
+        );
+    }
+
+    // QUARTERLY
+    else if (inspectionType === 'QUARTERLY') {
+
+        var nextQuarterMonth =
+            Math.floor(now.getMonth() / 3) * 3 + 3;
+
+        startDate = new Date(
+            now.getFullYear(),
+            nextQuarterMonth,
+            1
+        );
+    }
+
+    // ANNUAL
+    else if (inspectionType === 'ANNUAL') {
+
+        startDate = new Date(
+            now.getFullYear() + 1,
+            0,
+            1
+        );
+    }
+
+    // Due date
+    var dueDate = new Date(startDate);
+
+    dueDate.setDate(
+        dueDate.getDate() + (offset - 1)
+    );
+
+    // Format
+    var options = {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+    };
+
+    document.getElementById('detailPreviewStartDate').innerText =
+        startDate.toLocaleDateString('en-GB', options);
+
+    document.getElementById('detailPreviewDueDate').innerText =
+        dueDate.toLocaleDateString('en-GB', options);
+
+    var inspectionTypeText =
+        inspectionType.charAt(0) +
+        inspectionType.slice(1).toLowerCase();
+
+    document.getElementById('detailInspectionPreviewNote').innerText =
+        'This ' +
+        inspectionTypeText +
+        ' inspection will automatically start on ' +
+        startDate.toLocaleDateString('en-GB', options) +
+        ' and must be completed by ' +
+        dueDate.toLocaleDateString('en-GB', options) +
+        '.';
+
+    {% endif %}
+
+});
+
+</script>
 <script>
     document.getElementById('sendReminderBtn')?.addEventListener('click',function(e){
         if(this.dataset.clicked){

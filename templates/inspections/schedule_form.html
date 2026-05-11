@@ -111,6 +111,10 @@
     display: none;
     margin-top: 15px;
   }
+
+  .note_text {
+    color: #a91422;
+  }
 </style>
 {% endblock %}
 
@@ -280,7 +284,7 @@
             <div class="col-md-6">
               <div class="form-group">
                 <label for="{{ form.due_date.id_for_label }}">
-                  Due Date <span class="text-danger" id="dueDateRequired">*</span>
+                  End Date <span class="text-danger" id="dueDateRequired">*</span>
                 </label>
                 {{ form.due_date }}
                 {% if form.due_date.errors %}
@@ -331,13 +335,36 @@
                   Due Date Offset (days)
                 </label>
                 {{ form.due_date_offset_days }}
+                <div id="offsetError" class="text-danger small mt-1" style="display:none;"></div>
                 {% if form.due_date_offset_days.errors %}
                   <div class="text-danger small">{{ form.due_date_offset_days.errors }}</div>
                 {% endif %}
-                <small class="form-text text-muted">
+                <!-- <small class="form-text text-muted">
                   Due date = 1st of month + this many days
+                </small> -->
+                <small class="form-text text-muted">
+                    Enter how many days users will have to complete the inspection after it is automatically scheduled.
                 </small>
               </div>
+            </div>
+
+            <div id="nextSchedulePreview" class="alert alert-info mt-3" style="display:none;">
+
+                <strong><i class="fas fa-calendar-alt mr-1"></i>Next Inspection Preview</strong>
+
+                <div class="mt-2">
+                    <div>
+                        <strong>Start Date:</strong>
+                        <span id="previewStartDate">-</span>
+                    </div>
+                    <div>
+                        <strong>Due Date:</strong>
+                        <span id="previewDueDate">-</span>
+                    </div>
+                    <div class="mt-2 note_text font-weight-bold small"
+                        id="inspectionPreviewNote">
+                    </div>
+                </div>
             </div>
           </div>
 
@@ -380,23 +407,42 @@ document.addEventListener('DOMContentLoaded', function () {
   var scheduledRequired = document.getElementById('scheduledDateRequired');
   var dueDateRequired = document.getElementById('dueDateRequired');
 
-  autoCheckbox.addEventListener('change', function () {
-    if (this.checked) {
-      offsetSection.style.display = 'block';
-      scheduledDateField.removeAttribute('required');
-      dueDateField.removeAttribute('required');
-      scheduledRequired.style.display = 'none';
-      dueDateRequired.style.display = 'none';
-      scheduledDateField.closest('.form-group').style.opacity = '0.5';
-      dueDateField.closest('.form-group').style.opacity = '0.5';
-    } else {
-      offsetSection.style.display = 'none';
-      scheduledRequired.style.display = 'inline';
-      dueDateRequired.style.display = 'inline';
-      scheduledDateField.closest('.form-group').style.opacity = '1';
-      dueDateField.closest('.form-group').style.opacity = '1';
+    function toggleAutoSchedule() {
+
+        if (autoCheckbox.checked) {
+
+            offsetSection.style.display = 'block';
+
+            scheduledDateField.removeAttribute('required');
+            dueDateField.removeAttribute('required');
+
+            scheduledRequired.style.display = 'none';
+            dueDateRequired.style.display = 'none';
+
+            scheduledDateField.closest('.form-group').style.opacity = '0.5';
+            dueDateField.closest('.form-group').style.opacity = '0.5';
+
+        } else {
+
+            offsetSection.style.display = 'none';
+
+            scheduledRequired.style.display = 'inline';
+            dueDateRequired.style.display = 'inline';
+
+            scheduledDateField.closest('.form-group').style.opacity = '1';
+            dueDateField.closest('.form-group').style.opacity = '1';
+        }
+        updateNextSchedulePreview();
     }
-  });
+
+    autoCheckbox.addEventListener('change', toggleAutoSchedule);
+    document.getElementById('id_due_date_offset_days')
+        .addEventListener('input', updateNextSchedulePreview);
+    document.getElementById('id_template')
+        .addEventListener('change', updateNextSchedulePreview);
+
+    // IMPORTANT → for edit page pre-selected checkbox
+    toggleAutoSchedule();
 
   // ─── Load plants on page load ───────────────────────────────
   loadPlants();
@@ -410,6 +456,198 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Creating...';
   });
+
+    function updateNextSchedulePreview() {
+
+        var offset = parseInt(
+            document.getElementById('id_due_date_offset_days').value || 7
+        );
+
+        var previewBox = document.getElementById('nextSchedulePreview');
+
+        if (!autoCheckbox.checked) {
+            previewBox.style.display = 'none';
+            return;
+        }
+
+        var templateField = document.getElementById('id_template');
+
+        if (!templateField || !templateField.value) {
+            previewBox.style.display = 'none';
+            return;
+        }
+
+        var templateId = templateField.value;
+
+        fetch(
+            '/inspections/ajax/get-template-inspection-type/?template_id='
+            + templateId
+        )
+
+        .then(response => response.json())
+
+        .then(data => {
+
+            if (!data.success) {
+                previewBox.style.display = 'none';
+                return;
+            }
+
+            var inspectionType = data.inspection_type;
+            var inspectionTypeText = inspectionType.charAt(0) + inspectionType.slice(1).toLowerCase();
+
+            var errorBox = document.getElementById('offsetError');
+
+            errorBox.style.display = 'none';
+            errorBox.innerText = '';
+
+            // REAL DATE
+            var now = new Date();
+
+            // TESTING DATE
+            // var now = new Date('2026-06-03');
+
+            var startDate = new Date(now);
+
+            var maxOffset = null;
+
+            // DAILY
+            if (inspectionType === 'DAILY') {
+
+                maxOffset = 1;
+
+                // Tomorrow
+                startDate.setDate(now.getDate() + 1);
+
+                // If Sunday → move to Monday
+                if (startDate.getDay() === 0) {
+
+                    startDate.setDate(
+                        startDate.getDate() + 1
+                    );
+                }
+            }
+
+            // WEEKLY
+            else if (inspectionType === 'WEEKLY') {
+
+                maxOffset = 5;
+
+                // Find next Monday
+                var day = now.getDay();
+
+                // Sunday=0 Monday=1
+                var daysUntilMonday = (8 - day) % 7;
+
+                // If already Monday → next Monday
+                if (daysUntilMonday === 0) {
+                    daysUntilMonday = 7;
+                }
+
+                startDate.setDate(
+                    now.getDate() + daysUntilMonday
+                );
+            }
+
+            // MONTHLY
+            else if (inspectionType === 'MONTHLY') {
+
+                startDate = new Date(
+                    now.getFullYear(),
+                    now.getMonth() + 1,
+                    1
+                );
+
+                // Dynamic month days
+                var nextMonthLastDay = new Date(
+                    startDate.getFullYear(),
+                    startDate.getMonth() + 1,
+                    0
+                );
+
+                maxOffset = nextMonthLastDay.getDate();
+            }
+
+            // QUARTERLY
+            else if (inspectionType === 'QUARTERLY') {
+
+                maxOffset = 90;
+
+                var nextQuarterMonth =
+                    Math.floor(now.getMonth() / 3) * 3 + 3;
+
+                startDate = new Date(
+                    now.getFullYear(),
+                    nextQuarterMonth,
+                    1
+                );
+            }
+
+            // ANNUAL
+            else if (inspectionType === 'ANNUAL') {
+
+                maxOffset = 365;
+
+                startDate = new Date(
+                    now.getFullYear() + 1,
+                    0,
+                    1
+                );
+            }
+
+            // Validation
+            if (offset > maxOffset) {
+
+                errorBox.innerText =
+                    inspectionType +
+                    ' inspection allows maximum ' +
+                    maxOffset +
+                    ' days only.';
+
+                errorBox.style.display = 'block';
+
+                previewBox.style.display = 'none';
+
+                return;
+            }
+
+            // Due date
+            var dueDate = new Date(startDate);
+
+            dueDate.setDate(
+                dueDate.getDate() + (offset - 1)
+            );
+
+            // Format
+            var options = {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            };
+
+            document.getElementById('previewStartDate').innerText =
+                startDate.toLocaleDateString('en-GB', options);
+
+            document.getElementById('previewDueDate').innerText =
+                dueDate.toLocaleDateString('en-GB', options);
+
+            previewBox.style.display = 'block';
+
+            document.getElementById('inspectionPreviewNote').innerText = '* This ' + inspectionTypeText +
+                ' inspection will automatically start on ' + startDate.toLocaleDateString('en-GB', options) +
+                ' and must be completed by ' + dueDate.toLocaleDateString('en-GB', options) + ' end of the day.';
+
+        })
+
+        .catch(error => {
+
+            console.log('Preview error:', error);
+
+            previewBox.style.display = 'none';
+
+        });
+    }
 
 });
 
@@ -482,19 +720,27 @@ function loadPlants() {
       }
       data.forEach(function (plant) {
         var item = buildCheckboxItem(
-          'selected_plants', plant.id, 'plant_' + plant.id,
-          '<strong>' + plant.name + '</strong>' +
-          (plant.code ? ' <small class="text-muted">(' + plant.code + ')</small>' : ''),
-          'plant-checkbox',
-          function () {
-            updatePlantCount();
-            loadZonesForPlants();
-            loadUsersForPlants();
-          }
+            'selected_plants',
+            plant.id,
+            'plant_' + plant.id,
+            '<strong>' + plant.name + '</strong>' +
+            (plant.code ? ' <small class="text-muted">(' + plant.code + ')</small>' : ''),
+            'plant-checkbox',
+            function () {
+                updatePlantCount();
+                loadZonesForPlants();
+                loadUsersForPlants();
+            }
         );
+
+        if (selectedPlants.includes(plant.id)) {
+            item.querySelector('input').checked = true;
+        }
         grid.appendChild(item);
       });
       updatePlantCount();
+      loadZonesForPlants();
+        loadUsersForPlants();
     })
     .catch(function () {
       grid.innerHTML = '<div class="loading-text text-danger">Error loading plants</div>';
@@ -544,22 +790,28 @@ function loadZonesForPlants() {
       Object.keys(grouped).forEach(function (plantName) {
         grid.appendChild(buildGroupHeader(plantName, 'industry'));
         grouped[plantName].forEach(function (zone) {
-          var item = buildCheckboxItem(
-            'selected_zones', zone.id, 'zone_' + zone.id,
-            '<strong>' + zone.name + '</strong>' +
-            (zone.code ? ' <small class="text-muted">(' + zone.code + ')</small>' : ''),
-            'zone-checkbox',
-            function () {
-              updateZoneCount();
-              loadLocationsForZones();
+            var item = buildCheckboxItem(
+                'selected_zones', zone.id, 'zone_' + zone.id,
+                '<strong>' + zone.name + '</strong>' +
+                (zone.code ? ' <small class="text-muted">(' + zone.code + ')</small>' : ''),
+                'zone-checkbox',
+                function () {
+                    updateZoneCount();
+                    loadLocationsForZones();
+                }
+            );
+
+            if (selectedZones.includes(zone.id)) {
+                item.querySelector('input').checked = true;
             }
-          );
-          grid.appendChild(item);
+
+            grid.appendChild(item);
         });
       });
 
       bar.style.display = 'flex';
       updateZoneCount();
+      loadLocationsForZones();
     })
     .catch(function () {
       grid.innerHTML = '<div class="loading-text text-danger">Error loading zones</div>';
@@ -606,22 +858,28 @@ function loadLocationsForZones() {
       Object.keys(grouped).forEach(function (zoneName) {
         grid.appendChild(buildGroupHeader(zoneName, 'map-pin'));
         grouped[zoneName].forEach(function (loc) {
-          var item = buildCheckboxItem(
-            'selected_locations', loc.id, 'loc_' + loc.id,
-            '<strong>' + loc.name + '</strong>' +
-            (loc.code ? ' <small class="text-muted">(' + loc.code + ')</small>' : ''),
-            'location-checkbox',
-            function () {
-              updateLocationCount();
-              loadSublocationsForLocations();
+            var item = buildCheckboxItem(
+                'selected_locations', loc.id, 'loc_' + loc.id,
+                '<strong>' + loc.name + '</strong>' +
+                (loc.code ? ' <small class="text-muted">(' + loc.code + ')</small>' : ''),
+                'location-checkbox',
+                function () {
+                    updateLocationCount();
+                    loadSublocationsForLocations();
+                }
+            );
+
+            if (selectedLocations.includes(loc.id)) {
+                item.querySelector('input').checked = true;
             }
-          );
-          grid.appendChild(item);
+
+            grid.appendChild(item);
         });
       });
 
       bar.style.display = 'flex';
       updateLocationCount();
+      loadSublocationsForLocations();
     })
     .catch(function () {
       grid.innerHTML = '<div class="loading-text text-danger">Error loading locations</div>';
@@ -663,13 +921,18 @@ function loadSublocationsForLocations() {
       Object.keys(grouped).forEach(function (locName) {
         grid.appendChild(buildGroupHeader(locName, 'map-marker-alt'));
         grouped[locName].forEach(function (sub) {
-          var item = buildCheckboxItem(
-            'selected_sublocations', sub.id, 'sub_' + sub.id,
-            sub.name + (sub.code ? ' <small class="text-muted">(' + sub.code + ')</small>' : ''),
-            'sublocation-checkbox',
-            function () { updateSublocationCount(); }
-          );
-          grid.appendChild(item);
+            var item = buildCheckboxItem(
+                'selected_sublocations', sub.id, 'sub_' + sub.id,
+                sub.name + (sub.code ? ' <small class="text-muted">(' + sub.code + ')</small>' : ''),
+                'sublocation-checkbox',
+                function () { updateSublocationCount(); }
+            );
+
+            if (selectedSublocations.includes(sub.id)) {
+                item.querySelector('input').checked = true;
+            }
+
+            grid.appendChild(item);
         });
       });
 
@@ -716,15 +979,20 @@ function loadUsersForPlants() {
       Object.keys(grouped).forEach(function (plantName) {
         grid.appendChild(buildGroupHeader(plantName, 'building'));
         grouped[plantName].forEach(function (user) {
-          var item = buildCheckboxItem(
-            'selected_users', user.id, 'user_' + user.id,
-            '<strong>' + user.full_name + '</strong>' +
-            ' <small class="text-muted">— ' + user.role +
-            (user.department ? ' | ' + user.department : '') + '</small>',
-            'user-checkbox',
-            function () { updateUserCount(); }
-          );
-          grid.appendChild(item);
+            var item = buildCheckboxItem(
+                'selected_users', user.id, 'user_' + user.id,
+                '<strong>' + user.full_name + '</strong>' +
+                ' <small class="text-muted">— ' + user.role +
+                (user.department ? ' | ' + user.department : '') + '</small>',
+                'user-checkbox',
+                function () { updateUserCount(); }
+            );
+
+            if (selectedUsers.includes(user.id)) {
+                item.querySelector('input').checked = true;
+            }
+
+            grid.appendChild(item);
         });
       });
 
@@ -749,5 +1017,13 @@ function resetGrid(gridId, message) {
   document.getElementById(gridId).innerHTML =
     '<div class="loading-text">' + message + '</div>';
 }
+</script>
+
+<script>
+    const selectedPlants = {{ selected_plants|default:"[]"|safe }};
+    const selectedZones = {{ selected_zones|default:"[]"|safe }};
+    const selectedLocations = {{ selected_locations|default:"[]"|safe }};
+    const selectedSublocations = {{ selected_sublocations|default:"[]"|safe }};
+    const selectedUsers = {{ selected_users|default:"[]"|safe }};
 </script>
 {% endblock %}

@@ -107,7 +107,9 @@ class UserUpdateForm(BaseUserChangeForm):
         
         # --- NEW CODE STARTS HERE ---
         # Conditionally disable organization fields if the user is not an admin.
-        if self.request and not (self.request.user.is_superuser or self.request.user.is_admin_user):
+        # if self.request and not (self.request.user.is_superuser or self.request.user.is_admin_user):
+        if self.request and not (self.request.user.is_superuser or self.request.user.is_admin_user
+            or (self.request.user.role and self.request.user.role.name == 'SAFETY MANAGER')):
             # Disable Role and Department fields
             self.fields['role'].widget.attrs['disabled'] = 'disabled'
             self.fields['department'].widget.attrs['disabled'] = 'disabled'

@@ -237,7 +237,8 @@
           <h5 class="mb-3"><i class="fas fa-map-marked-alt mr-2"></i>Location Assignment</h5>
 
           <!-- Check if the logged-in user is a superuser or admin -->
-          {% if request.user.is_superuser or request.user.is_admin_user %}
+          
+            {% if can_edit_location_assignment %}
             
             <!-- EDITABLE VIEW FOR ADMINS -->
             <!-- This block contains the interactive checkboxes for location assignment -->
@@ -380,44 +381,41 @@
           <hr class="my-4">
 
           <!-- Active Status -->
-          <div class="row">
-            <div class="col-md-12 mb-3">
-              
-              <!-- Check if the logged-in user is a superuser or admin -->
-              {% if request.user.is_superuser or request.user.is_admin_user %}
-                
-                <!-- EDITABLE VIEW FOR ADMINS -->
-                <div class="form-check">
-                  {{ form.is_active }}
-                  <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
-                    Active User
-                  </label>
-                  <small class="form-helper-text d-block">Only administrators can change the active status.</small>
+            <div class="row">
+                <div class="col-md-12 mb-3">
+
+                    <div>
+                        <label>User Status</label>
+
+                        <div class="mt-1">
+
+                            {% if object.is_active %}
+
+                                <span class="badge badge-success"
+                                    style="font-size: 1rem; padding: 0.5em 0.8em;">
+
+                                    <i class="fas fa-check-circle mr-1"></i>
+                                    Active
+
+                                </span>
+
+                            {% else %}
+
+                                <span class="badge badge-danger"
+                                    style="font-size: 1rem; padding: 0.5em 0.8em;">
+
+                                    <i class="fas fa-times-circle mr-1"></i>
+                                    Inactive
+
+                                </span>
+
+                            {% endif %}
+
+                        </div>
+                    </div>
+
                 </div>
-
-              {% else %}
-
-                <!-- READ-ONLY VIEW FOR OTHER USERS -->
-                <div>
-                  <label>User Status</label>
-                  <div class="mt-1">
-                    {% if object.is_active %}
-                      <span class="badge badge-success" style="font-size: 1rem; padding: 0.5em 0.8em;">
-                        <i class="fas fa-check-circle mr-1"></i>Active
-                      </span>
-                    {% else %}
-                      <span class="badge badge-danger" style="font-size: 1rem; padding: 0.5em 0.8em;">
-                        <i class="fas fa-times-circle mr-1"></i>Inactive
-                      </span>
-                    {% endif %}
-                  </div>
-                </div>
-
-              {% endif %}
-              <!-- End of conditional block for Active Status -->
-
             </div>
-          </div>
 
           <!-- Form Actions -->
           <div class="row mt-4">

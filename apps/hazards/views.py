@@ -108,6 +108,8 @@ class HazardListView(LoginRequiredMixin, ListView):
         status = self.request.GET.get('status', '')
         date_from = self.request.GET.get('date_from', '')
         date_to = self.request.GET.get('date_to', '')
+        assigned_by = self.request.GET.get('assigned_by', '')
+        assigned_to = self.request.GET.get('assigned_to', '')
 
         # Apply filters
         if search:
@@ -121,6 +123,13 @@ class HazardListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(severity=risk_level)
         if status:
             queryset = queryset.filter(status=status)
+        if assigned_by:
+            queryset = queryset.filter(reported_by_id=assigned_by)
+
+        if assigned_to:
+            selected_user = User.objects.filter(id=assigned_to).first()
+            if selected_user:
+                queryset = queryset.filter(action_items__responsible_emails__icontains=selected_user.email).distinct()
         
         if date_from:
             queryset = queryset.filter(incident_datetime__date__gte=date_from)
@@ -131,7 +140,36 @@ class HazardListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        reported_users = User.objects.filter(hazards_reported__isnull=False)
+
+        assigned_users = User.objects.filter(hazards_assigned__isnull=False)
+
+        context['assigned_by_users'] = User.objects.filter(
+            hazards_reported__isnull=False,
+            is_active=True,
+            is_superuser=False,
+            is_active_employee=True
+        ).distinct().order_by('first_name', 'last_name')
+
+
+        from apps.hazards.models import HazardActionItem
+        assigned_emails = []
+        for action in HazardActionItem.objects.exclude(responsible_emails=''):
+            emails = [
+                email.strip()
+                for email in action.responsible_emails.split(',')
+                if email.strip()
+            ]
+            assigned_emails.extend(emails)
+        context['assigned_to_users'] = User.objects.filter(
+            email__in=assigned_emails,
+            is_active=True,
+            is_superuser=False,
+            is_active_employee=True
+        ).distinct().order_by('first_name', 'last_name')
         
+        print("context['assigned_by_users']",context['assigned_by_users'])
+        print("context['assigned_to_users']",context['assigned_to_users'])
         # Add choices for dropdown filters
         context['hazard_types'] = Hazard.HAZARD_TYPE_CHOICES
         context['risk_levels'] = Hazard.SEVERITY_CHOICES
@@ -142,6 +180,8 @@ class HazardListView(LoginRequiredMixin, ListView):
         context['selected_hazard_type'] = self.request.GET.get('hazard_type', '')
         context['selected_risk_level'] = self.request.GET.get('risk_level', '')
         context['selected_status'] = self.request.GET.get('status', '')
+        context['selected_assigned_by'] = self.request.GET.get('assigned_by', '')
+        context['selected_assigned_to'] = self.request.GET.get('assigned_to', '')
 
         return context
 class HazardCreateView(LoginRequiredMixin, CreateView):

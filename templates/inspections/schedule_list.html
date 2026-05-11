@@ -170,10 +170,16 @@
                                 <td><strong>{{ schedule.schedule_code }}</strong></td>
                                 <td>{{ schedule.template.template_name }}</td>
                                 <td>{{ schedule.assigned_to.get_full_name }}</td>
-                                <td>{{ schedule.plant.name }}</td>
+                                <td>
+                                    {% for plant in schedule.assigned_to.assigned_plants.all %}
+                                        <span class="badge badge-info">{{ plant.name }}</span>
+                                    {% empty %}
+                                        -
+                                    {% endfor %}
+                                </td>
                                 <td>{{ schedule.scheduled_date|date:"d M Y" }}</td>
                                 <td>
-                                    {{ schedule.due_date|date:"d M Y" }}
+                                    {{ schedule.display_due_date|date:"d M Y" }}
                                     {% if schedule.is_overdue %}
                                     <span class="badge badge-danger ml-1">Overdue</span>
                                     {% endif %}

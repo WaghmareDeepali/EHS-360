@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 def should_run_today(inspection_type, now):
 
     if inspection_type == 'DAILY':
+        # Skip Sunday
+        if now.weekday() == 6:
+            return False
+
         return True
 
     elif inspection_type == 'WEEKLY':
@@ -94,6 +98,13 @@ def auto_create_inspection_schedules(self):
     from apps.notifications.services import NotificationService
 
     now = timezone.now()
+    # from datetime import datetime
+
+    # now = timezone.make_aware(
+    #     datetime(2027, 5, 12, 9, 0, 0)
+    #     # year - month - date - hours - minutes
+    # )
+
     logger.info(f"[AutoSchedule] Running at {now}")
 
     # Get all active, non-paused configs
@@ -156,12 +167,17 @@ def auto_create_inspection_schedules(self):
                         if already_exists:
                             total_skipped += 1
                             continue
-
+                        
+                        original_schedule = InspectionSchedule.objects.filter(
+                            template=template,
+                            assigned_by__isnull=False
+                        ).order_by('created_at').first()
                         # Create schedule
                         schedule = InspectionSchedule.objects.create(
                             template=template,
                             assigned_to=user,
-                            assigned_by=None,  # system-created
+                            # assigned_by=None,  # system-created
+                            assigned_by=(original_schedule.assigned_by if original_schedule else None),
                             scheduled_date=scheduled_date,
                             due_date=due_date,
                             status='SCHEDULED',

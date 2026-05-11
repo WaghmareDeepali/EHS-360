@@ -73,5 +73,6 @@ urlpatterns = [
     path('ajax/get-locations/', views.get_locations_by_zone, name='get_locations_by_zone'),
     path('ajax/get-sublocations/', views.get_sublocations_by_location, name='get_sublocations_by_location'),
     path('ajax/get-questions/', views.get_questions_by_category, name='get_questions_by_category'),
+    path('ajax/get-template-inspection-type/', views.get_template_inspection_type, name='get_template_inspection_type'),
     path('schedules/<int:pk>/clone/', views.schedule_clone, name='schedule_clone'),
 ]

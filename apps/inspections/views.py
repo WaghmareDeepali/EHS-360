@@ -732,7 +732,12 @@ def schedule_list(request):
     # User-based filtering
     if request.user.is_superuser or request.user.is_admin_user:
         pass
-    elif request.user.has_permission('CONDUCT_INSPECTION') or request.user.can_access_inspection_module:
+    # elif request.user.has_permission('CONDUCT_INSPECTION') or request.user.can_access_inspection_module:
+    #     user_plants = request.user.get_all_plants()
+    #     schedules = schedules.filter(plants__in=user_plants).distinct()
+    elif request.user.has_permission('CONDUCT_INSPECTION'):
+        schedules = schedules.filter(assigned_to=request.user)
+    elif request.user.can_access_inspection_module:
         user_plants = request.user.get_all_plants()
         schedules = schedules.filter(plants__in=user_plants).distinct()
     else:
@@ -766,6 +771,49 @@ def schedule_list(request):
     paginator = Paginator(schedules, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+
+    from datetime import timedelta
+
+    for schedule in page_obj:
+
+        if schedule.template and schedule.template.inspection_type:
+
+            inspection_type = schedule.template.inspection_type
+
+            # DAILY
+            if inspection_type == 'DAILY':
+
+                schedule.display_due_date = schedule.scheduled_date
+
+            # WEEKLY
+            elif inspection_type == 'WEEKLY':
+
+                schedule.display_due_date = (
+                    schedule.scheduled_date + timedelta(days=6)
+                )
+
+            # MONTHLY
+            elif inspection_type == 'MONTHLY':
+
+                schedule.display_due_date = schedule.scheduled_date
+
+            # QUARTERLY
+            elif inspection_type == 'QUARTERLY':
+
+                schedule.display_due_date = schedule.scheduled_date
+
+            # ANNUAL
+            elif inspection_type == 'ANNUAL':
+
+                schedule.display_due_date = schedule.scheduled_date
+
+            else:
+
+                schedule.display_due_date = schedule.due_date
+
+        else:
+
+            schedule.display_due_date = schedule.due_date
     
     from apps.organizations.models import Plant
     plants = Plant.objects.filter(is_active=True)
@@ -940,7 +988,29 @@ def schedule_edit(request, pk):
     
     if request.method == 'POST':
         form = InspectionScheduleForm(request.POST, instance=schedule, user=request.user)
+        # if form.is_valid():
+        #     schedule = form.save(commit=False)
+        #     schedule.save()
+
+        #     selected_plant_ids = request.POST.getlist('selected_plants')
+        #     selected_zone_ids = request.POST.getlist('selected_zones')
+        #     selected_location_ids = request.POST.getlist('selected_locations')
+        #     selected_sublocation_ids = request.POST.getlist('selected_sublocations')
+        #     selected_user_ids = request.POST.getlist('selected_users')
+
+        #     schedule.plants.set(Plant.objects.filter(id__in=selected_plant_ids))
+        #     schedule.zones.set(Zone.objects.filter(id__in=selected_zone_ids))
+        #     schedule.locations.set(Location.objects.filter(id__in=selected_location_ids))
+        #     schedule.sublocations.set(SubLocation.objects.filter(id__in=selected_sublocation_ids))
+        #     schedule.assigned_users.set(User.objects.filter(id__in=selected_user_ids))
+        #     enable_auto = form.cleaned_data.get('enable_auto_schedule')
+        #     due_offset = form.cleaned_data.get('due_date_offset_days') or 7
+
+        #     messages.success(request, 'Inspection schedule updated successfully!')
+        #     return redirect('inspections:schedule_detail', pk=pk)
+
         if form.is_valid():
+
             schedule = form.save(commit=False)
             schedule.save()
 
@@ -948,22 +1018,88 @@ def schedule_edit(request, pk):
             selected_zone_ids = request.POST.getlist('selected_zones')
             selected_location_ids = request.POST.getlist('selected_locations')
             selected_sublocation_ids = request.POST.getlist('selected_sublocations')
+            selected_user_ids = request.POST.getlist('selected_users')
 
-            schedule.plants.set(Plant.objects.filter(id__in=selected_plant_ids))
-            schedule.zones.set(Zone.objects.filter(id__in=selected_zone_ids))
-            schedule.locations.set(Location.objects.filter(id__in=selected_location_ids))
-            schedule.sublocations.set(SubLocation.objects.filter(id__in=selected_sublocation_ids))
+            # Update M2M fields
+            schedule.plants.set(
+                Plant.objects.filter(id__in=selected_plant_ids)
+            )
+
+            schedule.zones.set(
+                Zone.objects.filter(id__in=selected_zone_ids)
+            )
+
+            schedule.locations.set(
+                Location.objects.filter(id__in=selected_location_ids)
+            )
+
+            schedule.sublocations.set(
+                SubLocation.objects.filter(id__in=selected_sublocation_ids)
+            )
+
+            schedule.assigned_users.set(
+                User.objects.filter(id__in=selected_user_ids)
+            )
+
+            # AUTO SCHEDULE LOGIC
+            enable_auto = form.cleaned_data.get('enable_auto_schedule')
+            due_offset = form.cleaned_data.get('due_date_offset_days') or 7
+
+            if enable_auto:
+
+                config, created = TemplateAutoScheduleConfig.objects.get_or_create(
+                    template=schedule.template,
+                    defaults={
+                        'due_date_offset_days': due_offset,
+                        'is_active': True,
+                        'is_paused': False,
+                        'created_by': request.user
+                    }
+                )
+
+                config.due_date_offset_days = due_offset
+                config.is_active = True
+                config.is_paused = False
+                config.save()
+
+                config.plants.set(schedule.plants.all())
+                config.zones.set(schedule.zones.all())
+                config.locations.set(schedule.locations.all())
+                config.sublocations.set(schedule.sublocations.all())
+                config.assigned_users.set(schedule.assigned_users.all())
+
+                schedule.auto_schedule_config = config
+                schedule.save()
+            else:
+                schedule.auto_schedule_config = None
+                schedule.save()
 
             messages.success(request, 'Inspection schedule updated successfully!')
             return redirect('inspections:schedule_detail', pk=pk)
     else:
-        form = InspectionScheduleForm(instance=schedule, user=request.user)
+        # form = InspectionScheduleForm(instance=schedule, user=request.user)
+        initial_data = {
+            'enable_auto_schedule': bool(schedule.auto_schedule_config),
+            'due_date_offset_days': (
+                schedule.auto_schedule_config.due_date_offset_days
+                if schedule.auto_schedule_config else 7
+            )
+        }
+
+        form = InspectionScheduleForm(instance=schedule,user=request.user,initial=initial_data)
     
     context = {
         'form': form,
         'action': 'Edit',
         'title': f'Edit Schedule: {schedule.schedule_code}',
-        'schedule': schedule
+        'schedule': schedule,
+
+        'selected_plants': list(schedule.plants.values_list('id', flat=True)),
+        'selected_zones': list(schedule.zones.values_list('id', flat=True)),
+        'selected_locations': list(schedule.locations.values_list('id', flat=True)),
+        'selected_sublocations': list(schedule.sublocations.values_list('id', flat=True)),
+        'selected_users': [schedule.assigned_to.id] if schedule.assigned_to else [],
+
     }
     return render(request, 'inspections/schedule_form.html', context)
 
@@ -1203,6 +1339,24 @@ def inspection_start(request, schedule_id):
     # Sort by category display order
     questions_by_category = dict(questions_by_category.items()) #removed - ,sorted(key=lambda x: x[0].display_order)
     
+    from datetime import timedelta
+
+    inspection_type = schedule.template.inspection_type
+
+    if inspection_type == 'DAILY':
+
+        schedule.display_due_date = schedule.scheduled_date
+
+    elif inspection_type == 'WEEKLY':
+
+        schedule.display_due_date = (
+            schedule.scheduled_date + timedelta(days=6)
+        )
+
+    else:
+
+        schedule.display_due_date = schedule.scheduled_date
+
     context = {
         'schedule': schedule,
         'questions_by_category': questions_by_category,
@@ -1464,6 +1618,26 @@ def get_questions_by_category(request):
     return JsonResponse({'questions': list(questions_data)})
 
 
+
+@login_required
+def get_template_inspection_type(request):
+
+    template_id = request.GET.get('template_id')
+
+    if not template_id:
+        return JsonResponse({'success': False})
+
+    try:
+        template = InspectionTemplate.objects.get(id=template_id)
+
+        return JsonResponse({
+            'success': True,
+            'inspection_type': template.inspection_type
+        })
+
+    except InspectionTemplate.DoesNotExist:
+        return JsonResponse({'success': False})
+    
 
 @login_required
 def no_answers_list(request):

@@ -396,7 +396,28 @@ class UserUpdateView(LoginRequiredMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         user = self.object
         
-        context['all_plants'] = Plant.objects.filter(is_active=True).order_by('name')
+        # context['all_plants'] = Plant.objects.filter(is_active=True).order_by('name')
+        # Admin → all plants
+        if self.request.user.is_superuser or self.request.user.is_admin_user:
+
+            context['all_plants'] = Plant.objects.filter(
+                is_active=True
+            ).order_by('name')
+
+        # Safety Manager → only assigned plants
+        elif (
+            self.request.user.role
+            and self.request.user.role.name == 'SAFETY MANAGER'
+        ):
+
+            context['all_plants'] = self.request.user.assigned_plants.filter(
+                is_active=True
+            ).order_by('name')
+
+        # Other users
+        else:
+
+            context['all_plants'] = Plant.objects.none()
         
         context['user_assigned_plants'] = list(user.assigned_plants.values_list('id', flat=True))
         context['user_assigned_zones'] = list(user.assigned_zones.values_list('id', flat=True))
@@ -409,6 +430,9 @@ class UserUpdateView(LoginRequiredMixin, UpdateView):
             context['user_assigned_locations_details'] = user.assigned_locations.all().order_by('name')
             context['user_assigned_sublocations_details'] = user.assigned_sublocations.all().order_by('name')
 
+        context['can_edit_location_assignment'] = (self.request.user.is_superuser or self.request.user.is_admin_user
+            or (self.request.user.role and self.request.user.role.name == 'SAFETY MANAGER')
+)
         context['cancel_url'] = (self.request.GET.get('next') or self.request.META.get('HTTP_REFERER') or '/')
         return context
     
@@ -429,7 +453,8 @@ class UserUpdateView(LoginRequiredMixin, UpdateView):
         # This prevents Django from switching the session to the updated user
         update_session_auth_hash(self.request, self.request.user)
 
-        if self.request.user.is_superuser or self.request.user.is_admin_user:
+        if (self.request.user.is_superuser or self.request.user.is_admin_user
+            or (self.request.user.role and self.request.user.role.name == 'SAFETY MANAGER')):
             assigned_plants = self.request.POST.getlist('assigned_plants')
             user.assigned_plants.set(assigned_plants)
             user.plant = Plant.objects.filter(id__in=assigned_plants).first()
