@@ -584,9 +584,28 @@
           <h5 class="mb-3"><i class="fas fa-camera mr-2"></i>Photo Evidence</h5>
           <div class="row">
             <div class="col-md-6 mb-3">
-              <label for="photos">Upload Photos (if any)</label>
-              <input type="file" class="form-control-file" id="photos" name="photos" multiple accept="image/*">
-              <small class="form-text text-muted">Multiple photos can be selected. Supported formats: JPG, PNG</small>
+              <label>Upload Photos (if any)</label>
+              <div>
+                <button type="button" id="uploadIncidentPhotosBtn" class="btn btn-outline-danger">
+                  <i class="fas fa-camera mr-1"></i>Upload Photos
+                </button>
+              </div>
+              <input type="file" class="d-none" id="photos" name="photos" multiple accept="image/*">
+              <input type="file" class="d-none" id="photos_camera" accept="image/*" capture="environment">
+              <small class="form-text text-muted">Choose from device or capture photo using camera.</small>
+              <div id="incidentPhotoPreview" class="mt-3"></div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label>Upload Videos (if any)</label>
+              <div>
+                <button type="button" id="uploadIncidentVideosBtn" class="btn btn-outline-danger">
+                  <i class="fas fa-video mr-1"></i>Upload Videos
+                </button>
+              </div>
+              <input type="file" class="d-none" id="videos" name="videos" multiple accept="video/*">
+              <input type="file" class="d-none" id="videos_camera" accept="video/*" capture="environment">
+              <small class="form-text text-muted">Choose from the device or record a video from the phone.</small>
+              <div id="incidentVideoPreview" class="mt-3"></div>
             </div>
           </div>
           
@@ -598,6 +617,23 @@
                 {% for photo in incident.photos.all %}
                   <div class="mr-2 mb-2">
                     <img src="{{ photo.photo.url }}" alt="Incident photo" style="width: 100px; height: 100px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" onclick="window.open('{{ photo.photo.url }}', '_blank')">
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if incident.videos.all %}
+          <div class="row">
+            <div class="col-md-12 mb-3">
+              <label>Existing Videos:</label>
+              <div class="row">
+                {% for video in incident.videos.all %}
+                  <div class="col-md-4 mb-3">
+                    <video controls style="width: 100%; border-radius: 10px;">
+                      <source src="{{ video.video.url }}">
+                    </video>
                   </div>
                 {% endfor %}
               </div>
@@ -635,6 +671,40 @@
     </div>
   </div>
 </div>
+<div id="incidentVideoOptionModal" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#fff; border-radius:16px 16px 0 0; box-shadow:0 -5px 20px rgba(0,0,0,0.2); padding:20px; z-index:9999;">
+  <div style="text-align:center; margin-bottom:15px; font-weight:600;">
+    Upload Video
+  </div>
+
+  <button id="recordIncidentVideoBtn" class="btn btn-danger w-100 mb-2">
+    Record Video
+  </button>
+
+  <button id="chooseIncidentVideoBtn" class="btn btn-outline-danger w-100 mb-2">
+    Choose from Device
+  </button>
+
+  <button type="button" id="cancelIncidentVideoBtn" class="btn btn-light w-100">
+    Cancel
+  </button>
+</div>
+<div id="incidentPhotoOptionModal" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#fff; border-radius:16px 16px 0 0; box-shadow:0 -5px 20px rgba(0,0,0,0.2); padding:20px; z-index:9999;">
+  <div style="text-align:center; margin-bottom:15px; font-weight:600;">
+    Upload Photo
+  </div>
+
+  <button id="captureIncidentPhotoBtn" class="btn btn-danger w-100 mb-2">
+    Open Camera
+  </button>
+
+  <button id="chooseIncidentPhotoBtn" class="btn btn-outline-danger w-100 mb-2">
+    Choose from Device
+  </button>
+
+  <button type="button" id="cancelIncidentPhotoBtn" class="btn btn-light w-100">
+    Cancel
+  </button>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -647,6 +717,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const incidentTypeSelect = document.getElementById('id_incident_type');
     const bodyPartsSection = document.getElementById('bodyPartsSection');
     const natureOfInjuryField = document.getElementById('id_nature_of_injury');
+    const incidentPhotoInput = document.getElementById('photos');
+    const incidentPhotoCameraInput = document.getElementById('photos_camera');
+    const incidentPhotoPreview = document.getElementById('incidentPhotoPreview');
+    const incidentPhotoModal = document.getElementById('incidentPhotoOptionModal');
+    const incidentVideoInput = document.getElementById('videos');
+    const incidentVideoCameraInput = document.getElementById('videos_camera');
+    const incidentVideoPreview = document.getElementById('incidentVideoPreview');
+    const incidentVideoModal = document.getElementById('incidentVideoOptionModal');
     
     // Age calculation fields
     const dateOfBirthField = document.getElementById('id_affected_date_of_birth');
@@ -965,6 +1043,115 @@ document.addEventListener('DOMContentLoaded', function() {
     // Trigger plant change to load initial zones and locations
     if (plantSelect && plantSelect.value) {
         plantSelect.dispatchEvent(new Event('change'));
+    }
+
+    document.getElementById('uploadIncidentVideosBtn').addEventListener('click', function() {
+        if (isMobileOrTablet()) {
+            incidentVideoModal.style.display = 'block';
+        } else {
+            incidentVideoInput.click();
+        }
+    });
+
+    document.getElementById('recordIncidentVideoBtn').addEventListener('click', function() {
+        incidentVideoModal.style.display = 'none';
+        incidentVideoCameraInput.click();
+    });
+
+    document.getElementById('chooseIncidentVideoBtn').addEventListener('click', function() {
+        incidentVideoModal.style.display = 'none';
+        incidentVideoInput.click();
+    });
+
+    document.getElementById('cancelIncidentVideoBtn').addEventListener('click', function() {
+        incidentVideoModal.style.display = 'none';
+    });
+
+    incidentVideoInput.addEventListener('change', function() {
+        renderIncidentVideoPreview(this.files);
+    });
+
+    incidentVideoCameraInput.addEventListener('change', function() {
+        if (!this.files.length) {
+            return;
+        }
+
+        const dataTransfer = new DataTransfer();
+        Array.from(this.files).forEach(file => dataTransfer.items.add(file));
+        incidentVideoInput.files = dataTransfer.files;
+        renderIncidentVideoPreview(incidentVideoInput.files);
+    });
+
+    function renderIncidentVideoPreview(files) {
+        if (!files || !files.length) {
+            incidentVideoPreview.innerHTML = '';
+            return;
+        }
+
+        incidentVideoPreview.innerHTML = Array.from(files).map(file => `
+            <div class="mb-3">
+                <div class="small text-muted mb-1">${file.name}</div>
+                <video controls style="width: 100%; max-width: 320px; border-radius: 10px;">
+                    <source src="${URL.createObjectURL(file)}" type="${file.type}">
+                </video>
+            </div>
+        `).join('');
+    }
+
+    function isMobileOrTablet() {
+        return /Android|iPhone|iPad|iPod|Tablet/i.test(navigator.userAgent);
+    }
+
+    document.getElementById('uploadIncidentPhotosBtn').addEventListener('click', function() {
+        if (isMobileOrTablet()) {
+            incidentPhotoModal.style.display = 'block';
+        } else {
+            incidentPhotoInput.click();
+        }
+    });
+
+    document.getElementById('captureIncidentPhotoBtn').addEventListener('click', function() {
+        incidentPhotoModal.style.display = 'none';
+        incidentPhotoCameraInput.click();
+    });
+
+    document.getElementById('chooseIncidentPhotoBtn').addEventListener('click', function() {
+        incidentPhotoModal.style.display = 'none';
+        incidentPhotoInput.click();
+    });
+
+    document.getElementById('cancelIncidentPhotoBtn').addEventListener('click', function() {
+        incidentPhotoModal.style.display = 'none';
+    });
+
+    incidentPhotoInput.addEventListener('change', function() {
+        renderIncidentPhotoPreview(this.files);
+    });
+
+    incidentPhotoCameraInput.addEventListener('change', function() {
+        if (!this.files.length) {
+            return;
+        }
+
+        const dataTransfer = new DataTransfer();
+        Array.from(this.files).forEach(file => dataTransfer.items.add(file));
+        incidentPhotoInput.files = dataTransfer.files;
+        renderIncidentPhotoPreview(incidentPhotoInput.files);
+    });
+
+    function renderIncidentPhotoPreview(files) {
+        if (!files || !files.length) {
+            incidentPhotoPreview.innerHTML = '';
+            return;
+        }
+
+        incidentPhotoPreview.innerHTML = Array.from(files).map(file => `
+            <div class="mb-3">
+                <div class="small text-muted mb-1">${file.name}</div>
+                <img src="${URL.createObjectURL(file)}"
+                     style="width:100%; max-width:220px; border-radius:10px; border:1px solid #ddd;">
+            </div>
+        `).join('');
     }
 });
 </script>

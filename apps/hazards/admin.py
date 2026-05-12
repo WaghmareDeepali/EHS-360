@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Hazard, HazardPhoto, HazardActionItem, HazardNotification
+from .models import Hazard, HazardPhoto, HazardVideo, HazardActionItem, HazardNotification
 
 
 @admin.register(Hazard)
@@ -24,6 +24,14 @@ class HazardActionItemAdmin(admin.ModelAdmin):
 class HazardPhotoAdmin(admin.ModelAdmin):
     list_display = ['id', 'hazard', 'photo_type', 'uploaded_by', 'uploaded_at']
     list_filter = ['photo_type', 'uploaded_at']
+    search_fields = ['hazard__report_number', 'description']
+    readonly_fields = ['uploaded_at']
+
+
+@admin.register(HazardVideo)
+class HazardVideoAdmin(admin.ModelAdmin):
+    list_display = ['id', 'hazard', 'video_type', 'uploaded_by', 'uploaded_at']
+    list_filter = ['video_type', 'uploaded_at']
     search_fields = ['hazard__report_number', 'description']
     readonly_fields = ['uploaded_at']
 

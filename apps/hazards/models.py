@@ -474,6 +474,52 @@ class HazardPhoto(models.Model):
         return f"{self.hazard.report_number} - Photo {self.id}"
 
 
+class HazardVideo(models.Model):
+    """Videos related to hazard"""
+
+    VIDEO_TYPE_CHOICES = [
+        ('evidence', 'Evidence'),
+        ('corrective_action', 'Corrective Action'),
+        ('before', 'Before'),
+        ('after', 'After'),
+    ]
+
+    hazard = models.ForeignKey(
+        Hazard,
+        on_delete=models.CASCADE,
+        related_name='videos'
+    )
+    video = models.FileField(
+        upload_to='hazard_videos/%Y/%m/',
+        help_text="Hazard video"
+    )
+    video_type = models.CharField(
+        max_length=20,
+        choices=VIDEO_TYPE_CHOICES,
+        default='evidence',
+        blank=True
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Brief description of the video"
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        help_text="User who uploaded the video"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['uploaded_at']
+        verbose_name = 'Hazard Video'
+        verbose_name_plural = 'Hazard Videos'
+
+    def __str__(self):
+        return f"{self.hazard.report_number} - Video {self.id}"
+
+
 class HazardActionItem(models.Model):
     """Action items for hazard resolution"""
     

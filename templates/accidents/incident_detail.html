@@ -555,6 +555,36 @@
     </div>
     {% endif %}
 
+    {% if videos %}
+    <div class="ehs-card mb-3">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-video mr-2"></i>Video Evidence
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          {% for video in videos %}
+          <div class="col-md-4 mb-3">
+            <div class="card">
+              <video controls style="width: 100%; border-radius: 6px 6px 0 0;">
+                <source src="{{ video.video.url }}">
+              </video>
+              <div class="card-body">
+                <p class="card-text small">
+                  <strong>{{ video.get_video_type_display }}</strong><br>
+                  {{ video.description|default:"No description" }}<br>
+                  <small class="text-muted">{{ video.uploaded_at|date:"d/m/Y H:i" }}</small>
+                </p>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Investigation Report -->
     {% if investigation_report %}
     <div class="ehs-card mb-3">

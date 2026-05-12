@@ -27,7 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import CellIsRule
 from django.conf import settings  
 from django.conf.urls.static import static  
-from apps.common.image_utils import compress_image
+from apps.common.image_utils import compress_image, compress_video
 
 from .forms import IncidentAttachmentForm # <-- Import the new form
 from django.views.generic import UpdateView
@@ -371,6 +371,16 @@ class IncidentCreateView(LoginRequiredMixin, CreateView):
                 photo_type='INCIDENT_SCENE',
                 uploaded_by=self.request.user
             )
+
+
+        for video in self.request.FILES.getlist('videos'):
+            compressed_video = compress_video(video)
+            IncidentVideo.objects.create(
+                incident=incident,
+                video=compressed_video,
+                video_type='INCIDENT_SCENE',
+                uploaded_by=self.request.user
+            )
         
         # ===== ADD NOTIFICATION HERE - AFTER INCIDENT IS SAVED =====
         # print("\n\n" + "#" * 70)
@@ -421,6 +431,7 @@ class IncidentDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['photos'] = self.object.photos.all()
+        context['videos'] = self.object.videos.all()
         context['action_items'] = self.object.action_items.all()
         context['cancel_url'] = (self.request.GET.get('next') or self.request.META.get('HTTP_REFERER') or '/')
         
@@ -625,6 +636,15 @@ class IncidentUpdateView(LoginRequiredMixin, UpdateView):
                 incident=self.object,
                 photo=compressed_photo,
                 photo_type='INCIDENT_SCENE',
+                uploaded_by=self.request.user
+            )
+
+        for video in self.request.FILES.getlist('videos'):
+            compressed_video = compress_video(video)
+            IncidentVideo.objects.create(
+                incident=self.object,
+                video=compressed_video,
+                video_type='INCIDENT_SCENE',
                 uploaded_by=self.request.user
             )
         

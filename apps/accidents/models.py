@@ -413,6 +413,30 @@ class IncidentPhoto(models.Model):
         return f"{self.incident.report_number} - {self.photo_type}"
 
 
+class IncidentVideo(models.Model):
+    """Videos related to incident"""
+
+    VIDEO_TYPES = [
+        ('INCIDENT_SCENE', 'Incident Scene'),
+        ('INJURY', 'Injury Video'),
+        ('EVIDENCE', 'Evidence'),
+        ('CORRECTIVE_ACTION', 'Corrective Action'),
+    ]
+
+    incident = models.ForeignKey(Incident, on_delete=models.CASCADE, related_name='videos')
+    video = models.FileField(upload_to='incident_videos/%Y/%m/')
+    video_type = models.CharField(max_length=20, choices=VIDEO_TYPES)
+    description = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['uploaded_at']
+
+    def __str__(self):
+        return f"{self.incident.report_number} - {self.video_type}"
+
+
 
 class IncidentInvestigationReport(models.Model):
     """Investigation Report (Required within 7 days)"""

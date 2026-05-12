@@ -107,6 +107,19 @@ class IncidentPhotoAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
+@admin.register(IncidentVideo)
+class IncidentVideoAdmin(admin.ModelAdmin):
+    list_display = ['incident', 'video_type', 'uploaded_by', 'uploaded_at']
+    list_filter = ['video_type', 'uploaded_at']
+    search_fields = ['incident__report_number', 'description']
+    readonly_fields = ['uploaded_by', 'uploaded_at']
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.uploaded_by = request.user
+        super().save_model(request, obj, form, change)
+
+
 @admin.register(IncidentInvestigationReport)
 class IncidentInvestigationReportAdmin(admin.ModelAdmin):
     list_display = [

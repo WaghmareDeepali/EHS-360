@@ -308,6 +308,33 @@
             </div>
             {% endif %}
 
+            {% if videos %}
+            <div class="card mt-4">
+                <div class="card-header bg-danger">
+                    <h3 class="card-title text-white">
+                        <i class="fas fa-video"></i> Hazard Videos ({{ videos.count }})
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for video in videos %}
+                        <div class="col-md-4 mb-3">
+                            <video controls style="width: 100%; border-radius: 10px;">
+                                <source src="{{ video.video.url }}">
+                            </video>
+                            {% if video.description %}
+                            <p class="text-muted small mt-1">{{ video.description }}</p>
+                            {% endif %}
+                            <p class="text-muted small">
+                                <i class="fas fa-calendar"></i> {{ video.uploaded_at|date:"d M Y" }}
+                            </p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Action Items Card -->
             <div class="card">
                 <div class="card-header bg-warning">

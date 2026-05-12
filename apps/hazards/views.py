@@ -9,7 +9,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from apps.organizations.models import *
-from .models import Hazard, HazardPhoto, HazardActionItem
+from .models import Hazard, HazardPhoto, HazardVideo, HazardActionItem
 from django.utils.safestring import mark_safe  # ADD THIS IMPORT
 
 from django.contrib.auth import get_user_model
@@ -20,7 +20,7 @@ from django.http import HttpResponse
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from .utils import generate_hazard_pdf
 from django.views import View
-from apps.common.image_utils import compress_image
+from apps.common.image_utils import compress_image, compress_video
 
 import json
 from django.db.models import Count
@@ -387,6 +387,18 @@ class HazardCreateView(LoginRequiredMixin, CreateView):
                         photos_uploaded += 1
                     except Exception as e:
                         print(f"Photo error: {e}")
+
+            for video in request.FILES.getlist(f'{prefix}videos'):
+                try:
+                    compressed_video = compress_video(video)
+                    HazardVideo.objects.create(
+                        hazard=hazard,
+                        video=compressed_video,
+                        video_type='evidence',
+                        uploaded_by=user
+                    )
+                except Exception as e:
+                    print(f"Video error: {e}")
             
             photos_uploaded_total += photos_uploaded
             created_hazards.append(hazard)
@@ -456,6 +468,7 @@ class HazardDetailView(LoginRequiredMixin, DetailView):
             'behalf_person_dept'
         ).prefetch_related(
             'photos', 
+            'videos',
             'action_items'  # ✅ FIXED: Just prefetch action_items (no responsible_person)
         )
 
@@ -470,6 +483,7 @@ class HazardDetailView(LoginRequiredMixin, DetailView):
         hazard = self.get_object()
         context['action_items'] = hazard.action_items.all()
         context['photos'] = hazard.photos.all()
+        context['videos'] = hazard.videos.all()
         context['cancel_url'] = (self.request.GET.get('next') or self.request.META.get('HTTP_REFERER') or '/')
         
         return context
@@ -501,6 +515,7 @@ class HazardUpdateView(LoginRequiredMixin, UpdateView):
         # Get departments for behalf dropdown
         context['departments'] = Department.objects.filter(is_active=True).order_by('name')
         context['photos'] = hazard.photos.all()
+        context['videos'] = hazard.videos.all()
         return context
 
     def form_valid(self, form):
@@ -566,6 +581,19 @@ class HazardUpdateView(LoginRequiredMixin, UpdateView):
                 photo_index += 1
             else:
                 break
+
+        for video in self.request.FILES.getlist('videos'):
+            try:
+                compressed_video = compress_video(video)
+                HazardVideo.objects.create(
+                    hazard=hazard,
+                    video=compressed_video,
+                    video_type='evidence',
+                    uploaded_by=user
+                )
+                print("Added new video")
+            except Exception as e:
+                print(f"Error uploading video: {e}")
         
         # Success message
         messages.success(
