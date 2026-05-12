@@ -772,49 +772,6 @@ def schedule_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    from datetime import timedelta
-
-    for schedule in page_obj:
-
-        if schedule.template and schedule.template.inspection_type:
-
-            inspection_type = schedule.template.inspection_type
-
-            # DAILY
-            if inspection_type == 'DAILY':
-
-                schedule.display_due_date = schedule.scheduled_date
-
-            # WEEKLY
-            elif inspection_type == 'WEEKLY':
-
-                schedule.display_due_date = (
-                    schedule.scheduled_date + timedelta(days=6)
-                )
-
-            # MONTHLY
-            elif inspection_type == 'MONTHLY':
-
-                schedule.display_due_date = schedule.scheduled_date
-
-            # QUARTERLY
-            elif inspection_type == 'QUARTERLY':
-
-                schedule.display_due_date = schedule.scheduled_date
-
-            # ANNUAL
-            elif inspection_type == 'ANNUAL':
-
-                schedule.display_due_date = schedule.scheduled_date
-
-            else:
-
-                schedule.display_due_date = schedule.due_date
-
-        else:
-
-            schedule.display_due_date = schedule.due_date
-    
     from apps.organizations.models import Plant
     plants = Plant.objects.filter(is_active=True)
     
@@ -896,6 +853,7 @@ def schedule_create(request):
                             department=form.cleaned_data.get('department'),
                             scheduled_date=form.cleaned_data.get('scheduled_date'),
                             due_date=form.cleaned_data.get('due_date'),
+                            scheduled_end_date=form.cleaned_data.get('scheduled_end_date'),
                             assignment_notes=form.cleaned_data.get('assignment_notes', ''),
                             status='SCHEDULED'
                         )
@@ -1258,7 +1216,7 @@ def my_inspections(request):
     ).select_related('template', 'department')
     
     # Filters
-    status = request.GET.get('status', 'SCHEDULED')
+    status = request.GET.get('status')
     if status:
         schedules = schedules.filter(status=status)
     
@@ -1339,24 +1297,6 @@ def inspection_start(request, schedule_id):
     # Sort by category display order
     questions_by_category = dict(questions_by_category.items()) #removed - ,sorted(key=lambda x: x[0].display_order)
     
-    from datetime import timedelta
-
-    inspection_type = schedule.template.inspection_type
-
-    if inspection_type == 'DAILY':
-
-        schedule.display_due_date = schedule.scheduled_date
-
-    elif inspection_type == 'WEEKLY':
-
-        schedule.display_due_date = (
-            schedule.scheduled_date + timedelta(days=6)
-        )
-
-    else:
-
-        schedule.display_due_date = schedule.scheduled_date
-
     context = {
         'schedule': schedule,
         'questions_by_category': questions_by_category,

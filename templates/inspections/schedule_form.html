@@ -269,7 +269,7 @@
           <h5 class="mb-3"><i class="fas fa-clock"></i> Schedule Timing</h5>
 
           <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-4">
               <div class="form-group">
                 <label for="{{ form.scheduled_date.id_for_label }}">
                   Scheduled Date <span class="text-danger" id="scheduledDateRequired">*</span>
@@ -281,17 +281,26 @@
                 <small class="form-text text-muted">When should the inspection start?</small>
               </div>
             </div>
-            <div class="col-md-6">
-              <div class="form-group">
-                <label for="{{ form.due_date.id_for_label }}">
-                  End Date <span class="text-danger" id="dueDateRequired">*</span>
-                </label>
-                {{ form.due_date }}
-                {% if form.due_date.errors %}
-                  <div class="text-danger small">{{ form.due_date.errors }}</div>
-                {% endif %}
-                <small class="form-text text-muted">Deadline for completion</small>
-              </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="{{ form.due_date.id_for_label }}">First Inspection Due Date<span class="text-danger" id="dueDateRequired">*</span></label>
+                    {{ form.due_date }}
+                    {% if form.due_date.errors %}
+                        <div class="text-danger small">{{ form.due_date.errors }}</div>
+                    {% endif %}
+                    <small class="form-text text-muted">Due date for the first inspection only</small>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="{{ form.scheduled_end_date.id_for_label }}">Scheduled End Date<span class="text-danger" id="scheduledEndRequired">*</span></label>
+                    {{ form.scheduled_end_date }}
+                    {% if form.scheduled_end_date.errors %}
+                        <div class="text-danger small">{{ form.scheduled_end_date.errors }}</div>
+                    {% endif %}
+                    <small class="form-text text-muted">Stop auto-generating inspections after this date</small>
+                </div>
             </div>
           </div>
 
@@ -406,8 +415,11 @@ document.addEventListener('DOMContentLoaded', function () {
   var dueDateField = document.getElementById('id_due_date');
   var scheduledRequired = document.getElementById('scheduledDateRequired');
   var dueDateRequired = document.getElementById('dueDateRequired');
+    var scheduledEndRequired = document.getElementById('scheduledEndRequired');
 
     function toggleAutoSchedule() {
+        var scheduledEndField =
+            document.getElementById('id_scheduled_end_date');
 
         if (autoCheckbox.checked) {
 
@@ -419,19 +431,39 @@ document.addEventListener('DOMContentLoaded', function () {
             scheduledRequired.style.display = 'none';
             dueDateRequired.style.display = 'none';
 
+            if (scheduledEndRequired) {
+                scheduledEndRequired.style.display = 'none';
+            }
+
             scheduledDateField.closest('.form-group').style.opacity = '0.5';
+
             dueDateField.closest('.form-group').style.opacity = '0.5';
+
+            if (scheduledEndField) {
+                scheduledEndField.closest('.form-group').style.opacity = '0.5';
+            }
 
         } else {
 
             offsetSection.style.display = 'none';
 
             scheduledRequired.style.display = 'inline';
+
             dueDateRequired.style.display = 'inline';
 
+            if (scheduledEndRequired) {
+                scheduledEndRequired.style.display = 'inline';
+            }
+
             scheduledDateField.closest('.form-group').style.opacity = '1';
+
             dueDateField.closest('.form-group').style.opacity = '1';
+
+            if (scheduledEndField) {
+                scheduledEndField.closest('.form-group').style.opacity = '1';
+            }
         }
+
         updateNextSchedulePreview();
     }
 
@@ -505,7 +537,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var now = new Date();
 
             // TESTING DATE
-            // var now = new Date('2026-06-03');
+            //var now = new Date('2026-06-03');
 
             var startDate = new Date(now);
 
@@ -550,15 +582,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // MONTHLY
+            // MONTHLY
             else if (inspectionType === 'MONTHLY') {
 
+                // 1st day of next month
                 startDate = new Date(
                     now.getFullYear(),
                     now.getMonth() + 1,
                     1
                 );
 
-                // Dynamic month days
+                // Last day of next month
                 var nextMonthLastDay = new Date(
                     startDate.getFullYear(),
                     startDate.getMonth() + 1,
@@ -571,28 +605,89 @@ document.addEventListener('DOMContentLoaded', function () {
             // QUARTERLY
             else if (inspectionType === 'QUARTERLY') {
 
-                maxOffset = 90;
+                var month = now.getMonth() + 1; // JS month 0-11
 
-                var nextQuarterMonth =
-                    Math.floor(now.getMonth() / 3) * 3 + 3;
+                var year = now.getFullYear();
+
+                var nextQuarterMonth;
+
+                // FY Quarters
+                // Q1 = Apr-Jun
+                // Q2 = Jul-Sep
+                // Q3 = Oct-Dec
+                // Q4 = Jan-Mar
+
+                if (month >= 4 && month <= 6) {
+
+                    // Next = Jul
+                    nextQuarterMonth = 6;
+
+                } else if (month >= 7 && month <= 9) {
+
+                    // Next = Oct
+                    nextQuarterMonth = 9;
+
+                } else if (month >= 10 && month <= 12) {
+
+                    // Next = Jan next year
+                    nextQuarterMonth = 0;
+                    year += 1;
+
+                } else {
+
+                    // Jan-Mar → Next = Apr
+                    nextQuarterMonth = 3;
+                }
 
                 startDate = new Date(
-                    now.getFullYear(),
+                    year,
                     nextQuarterMonth,
                     1
                 );
+
+                // Quarter end date
+                var quarterEnd = new Date(
+                    year,
+                    nextQuarterMonth + 3,
+                    0
+                );
+
+                // Exact days in quarter
+                maxOffset = Math.floor(
+                    (quarterEnd - startDate) / (1000 * 60 * 60 * 24)
+                ) + 1;
+                
             }
 
             // ANNUAL
             else if (inspectionType === 'ANNUAL') {
 
-                maxOffset = 365;
+                var year = now.getFullYear();
+
+                // FY start = April 1
+
+                if ((now.getMonth() + 1) >= 4) {
+
+                    // Next FY
+                    year += 1;
+                }
 
                 startDate = new Date(
-                    now.getFullYear() + 1,
-                    0,
+                    year,
+                    3,
                     1
                 );
+
+                // FY end = March 31
+                var yearEnd = new Date(
+                    year + 1,
+                    3,
+                    0
+                );
+
+                maxOffset = Math.floor(
+                    (yearEnd - startDate) / (1000 * 60 * 60 * 24)
+                ) + 1;
             }
 
             // Validation
@@ -634,9 +729,65 @@ document.addEventListener('DOMContentLoaded', function () {
 
             previewBox.style.display = 'block';
 
-            document.getElementById('inspectionPreviewNote').innerText = '* This ' + inspectionTypeText +
-                ' inspection will automatically start on ' + startDate.toLocaleDateString('en-GB', options) +
-                ' and must be completed by ' + dueDate.toLocaleDateString('en-GB', options) + ' end of the day.';
+            var previewMessage = '';
+
+            // DAILY
+            if (inspectionType === 'DAILY') {
+
+                previewMessage =
+                    '* This Daily inspection will automatically start on '
+                    + startDate.toLocaleDateString('en-GB', options)
+                    + ' and must be completed by '
+                    + dueDate.toLocaleDateString('en-GB', options)
+                    + ' end of the day.';
+            }
+
+            // WEEKLY
+            else if (inspectionType === 'WEEKLY') {
+
+                previewMessage =
+                    '* This Weekly inspection will automatically start on '
+                    + startDate.toLocaleDateString('en-GB', options)
+                    + ' and must be completed by '
+                    + dueDate.toLocaleDateString('en-GB', options)
+                    + ' within the same week.';
+            }
+
+            // MONTHLY
+            else if (inspectionType === 'MONTHLY') {
+
+                previewMessage =
+                    '* This Monthly inspection will automatically start on '
+                    + startDate.toLocaleDateString('en-GB', options)
+                    + ' and must be completed by '
+                    + dueDate.toLocaleDateString('en-GB', options)
+                    + ' within the same month.';
+            }
+
+            // QUARTERLY
+            else if (inspectionType === 'QUARTERLY') {
+
+                previewMessage =
+                    '* This Quarterly inspection will automatically start on '
+                    + startDate.toLocaleDateString('en-GB', options)
+                    + ' and must be completed by '
+                    + dueDate.toLocaleDateString('en-GB', options)
+                    + ' within the same quarter.';
+            }
+
+            // ANNUAL
+            else if (inspectionType === 'ANNUAL') {
+
+                previewMessage =
+                    '* This Annual inspection will automatically start on '
+                    + startDate.toLocaleDateString('en-GB', options)
+                    + ' and must be completed by '
+                    + dueDate.toLocaleDateString('en-GB', options)
+                    + ' within the same year.';
+            }
+
+            document.getElementById('inspectionPreviewNote').innerText =
+                previewMessage;
 
         })
 
@@ -653,13 +804,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // ─── Generic helpers ──────────────────────────────────────────
 function selectAll(cls, countFn) {
-  document.querySelectorAll('.' + cls).forEach(function (cb) { cb.checked = true; });
-  if (countFn) countFn();
+    document.querySelectorAll('.' + cls).forEach(function (cb) {
+        cb.checked = true;
+        // Trigger change event
+        cb.dispatchEvent(new Event('change'));
+    });
+    if (countFn) {
+        countFn();
+    }
 }
 
 function deselectAll(cls, countFn) {
-  document.querySelectorAll('.' + cls).forEach(function (cb) { cb.checked = false; });
-  if (countFn) countFn();
+    document.querySelectorAll('.' + cls).forEach(function (cb) {
+        cb.checked = false;
+        // Trigger change event
+        cb.dispatchEvent(new Event('change'));
+    });
+    if (countFn) {
+        countFn();
+    }
 }
 
 function updatePlantCount() {

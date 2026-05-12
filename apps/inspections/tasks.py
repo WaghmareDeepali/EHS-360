@@ -25,14 +25,14 @@ def should_run_today(inspection_type, now):
         return now.day == 1
 
     elif inspection_type == 'QUARTERLY':
-        return now.day == 1 and now.month in [1, 4, 7, 10]
+        return now.day == 1 and now.month in [4, 7, 10, 1]
     # ADD this case in should_run_today
     elif inspection_type == 'ANNUAL':
-        return now.day == 1 and now.month == 1  # 1st January
+        return now.day == 1 and now.month == 4
     return False
 
 # Get schedule period & dates
-def get_schedule_dates(inspection_type, now, config):
+def get_schedule_dates(inspection_type, now):
 
     if inspection_type == 'DAILY':
         start = now
@@ -55,12 +55,23 @@ def get_schedule_dates(inspection_type, now, config):
         scheduled_date = start.date()
 
     elif inspection_type == 'QUARTERLY':
-        quarter = (now.month - 1) // 3 + 1
-        start_month = 3 * (quarter - 1) + 1
-
+        # FY Quarter Mapping
+        # Apr-Jun = Q1
+        # Jul-Sep = Q2
+        # Oct-Dec = Q3
+        # Jan-Mar = Q4
+        if now.month in [4, 5, 6]:
+            start_month = 4
+        elif now.month in [7, 8, 9]:
+            start_month = 7
+        elif now.month in [10, 11, 12]:
+            start_month = 10
+        else:
+            start_month = 1
         start = now.replace(month=start_month, day=1)
-
-        if start_month + 3 > 12:
+        if start_month == 1:
+            end = start.replace(month=4)
+        elif start_month == 10:
             end = start.replace(year=start.year + 1, month=1)
         else:
             end = start.replace(month=start_month + 3)
@@ -68,16 +79,39 @@ def get_schedule_dates(inspection_type, now, config):
         scheduled_date = start.date()
     
     elif inspection_type == 'ANNUAL':
-        start = now.replace(month=1, day=1)
-        end = start.replace(year=start.year + 1)
+        # FY = Apr → Mar
+        if now.month >= 4:
+            start = now.replace(month=4, day=1)
+            end = start.replace(year=start.year + 1,month=4,day=1)
+        else:
+            start = now.replace(year=now.year - 1,month=4,day=1)
+            end = start.replace(year=start.year + 1,month=4,day=1)
         scheduled_date = start.date()
 
     else:
         return None, None, None, None
 
-    due_date = scheduled_date + timezone.timedelta(
-        days=config.due_date_offset_days
-    )
+    # due_date = scheduled_date + timezone.timedelta(
+    #     days=config.due_date_offset_days
+    # )
+
+    # DAILY
+    if inspection_type == 'DAILY':
+        due_date = scheduled_date
+    # WEEKLY
+    elif inspection_type == 'WEEKLY':
+        due_date = scheduled_date + timezone.timedelta(days=6)
+    # MONTHLY
+    elif inspection_type == 'MONTHLY':
+        due_date = end.date() - timezone.timedelta(days=1)
+    # QUARTERLY
+    elif inspection_type == 'QUARTERLY':
+        due_date = end.date() - timezone.timedelta(days=1)
+    # ANNUAL
+    elif inspection_type == 'ANNUAL':
+        due_date = end.date() - timezone.timedelta(days=1)
+    else:
+        due_date = scheduled_date
 
     return scheduled_date, start.date(), end.date(), due_date
 
@@ -98,10 +132,12 @@ def auto_create_inspection_schedules(self):
     from apps.notifications.services import NotificationService
 
     now = timezone.now()
+
+    # for testing perpose
     # from datetime import datetime
 
     # now = timezone.make_aware(
-    #     datetime(2027, 5, 12, 9, 0, 0)
+    #     datetime(2029, 4, 1, 9, 0, 0)
     #     # year - month - date - hours - minutes
     # )
 
@@ -133,8 +169,24 @@ def auto_create_inspection_schedules(self):
             scheduled_date, period_start, period_end, due_date = get_schedule_dates(
                 inspection_type,
                 now,
-                config
             )
+
+            # Stop recurring generation after scheduled_end_date
+            original_schedule = InspectionSchedule.objects.filter(
+                template=template,
+                scheduled_end_date__isnull=False
+            ).order_by('created_at').first()
+
+            if (
+                original_schedule and
+                original_schedule.scheduled_end_date and
+                scheduled_date > original_schedule.scheduled_end_date
+            ):
+                logger.info(
+                    f"[AutoSchedule] Stopped for template "
+                    f"{template.id} due to scheduled_end_date"
+                )
+                continue
 
             if not scheduled_date:
                 continue
@@ -158,11 +210,19 @@ def auto_create_inspection_schedules(self):
                     with transaction.atomic():
                         # Check if schedule already exists for this
                         # month + template + user to avoid duplicates
+                        print(
+                            "CHECKING:",
+                            template.id,
+                            user.id,
+                            scheduled_date
+                        )
                         already_exists = InspectionSchedule.objects.filter(
                             template=template,
                             assigned_to=user,
                             scheduled_date=scheduled_date  
                         ).exists()
+
+                        print("ALREADY EXISTS:", already_exists)
 
                         if already_exists:
                             total_skipped += 1
@@ -170,8 +230,15 @@ def auto_create_inspection_schedules(self):
                         
                         original_schedule = InspectionSchedule.objects.filter(
                             template=template,
-                            assigned_by__isnull=False
+                            scheduled_end_date__isnull=False
                         ).order_by('created_at').first()
+
+                        InspectionSchedule.objects.filter(
+                            template=template,
+                            assigned_to=user,
+                            status__in=['SCHEDULED', 'IN_PROGRESS'],
+                            scheduled_date__lt=scheduled_date
+                        ).update(status='OVERDUE')
                         # Create schedule
                         schedule = InspectionSchedule.objects.create(
                             template=template,
@@ -179,8 +246,11 @@ def auto_create_inspection_schedules(self):
                             # assigned_by=None,  # system-created
                             assigned_by=(original_schedule.assigned_by if original_schedule else None),
                             scheduled_date=scheduled_date,
+                            scheduled_end_date=(original_schedule.scheduled_end_date
+                                if original_schedule else None),
                             due_date=due_date,
                             status='SCHEDULED',
+                            auto_schedule_config=config,
                             assignment_notes=(f"Auto-created for {inspection_type} "f"({scheduled_date})"))
 
                         # Set M2M

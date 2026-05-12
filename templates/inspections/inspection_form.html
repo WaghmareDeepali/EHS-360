@@ -34,11 +34,11 @@
             <div class="row">
                 <div class="col-md-3">
                     <strong><i class="fas fa-industry"></i> Plant:</strong><br>
-                    {% for plant in schedule.assigned_to.assigned_plants.all %}
-                        <span class="badge badge-info">{{ plant.name }}</span>
-                    {% empty %}
-                        -
-                    {% endfor %}
+                        {% for plant in schedule.assigned_to.assigned_plants.all %}
+                            <span class="badge badge-info">{{ plant.name }}</span>
+                        {% empty %}
+                            -
+                        {% endfor %}
                 </div>
                 <div class="col-md-3">
                     <strong><i class="fas fa-calendar-alt"></i> Scheduled:</strong><br>

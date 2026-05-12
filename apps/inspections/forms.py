@@ -240,7 +240,7 @@ class InspectionScheduleForm(forms.ModelForm):
         required=False,
         initial=7,
         min_value=1,
-        max_value=60,
+        # max_value=60,
         widget=forms.NumberInput(attrs={
             'class': 'form-control',
             'id': 'id_due_date_offset_days',
@@ -257,6 +257,7 @@ class InspectionScheduleForm(forms.ModelForm):
             'department',
             'scheduled_date',
             'due_date',
+            'scheduled_end_date',
             'assignment_notes',
         ]
         widgets = {
@@ -267,6 +268,10 @@ class InspectionScheduleForm(forms.ModelForm):
                 'type': 'date'
             }),
             'due_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'scheduled_end_date': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'date'
             }),
@@ -292,12 +297,14 @@ class InspectionScheduleForm(forms.ModelForm):
         # (handled in clean)
         self.fields['scheduled_date'].required = False
         self.fields['due_date'].required = False
+        self.fields['scheduled_end_date'].required = False
 
     def clean(self):
         cleaned_data = super().clean()
         enable_auto = cleaned_data.get('enable_auto_schedule')
         scheduled_date = cleaned_data.get('scheduled_date')
         due_date = cleaned_data.get('due_date')
+        scheduled_end_date = cleaned_data.get('scheduled_end_date')
 
         if not enable_auto:
             # Manual schedule — dates are required
@@ -306,7 +313,10 @@ class InspectionScheduleForm(forms.ModelForm):
             if not due_date:
                 self.add_error('due_date', 'Due date is required.')
             if scheduled_date and due_date and due_date < scheduled_date:
-                self.add_error('due_date', 'Due date cannot be before scheduled date.')
+                self.add_error('due_date','Due date cannot be before scheduled date.')
+
+            if (due_date and scheduled_end_date and scheduled_end_date < due_date):
+                self.add_error('scheduled_end_date', 'Scheduled end date cannot be before due date.')
 
         return cleaned_data
     

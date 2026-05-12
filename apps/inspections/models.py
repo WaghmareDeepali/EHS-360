@@ -464,6 +464,12 @@ class InspectionSchedule(models.Model):
     due_date = models.DateField(
         verbose_name="Due Date"
     )
+    scheduled_end_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Schedule End Date",
+        help_text="Stop auto-generating inspections after this date"
+    )
     started_at = models.DateTimeField(
         null=True,
         blank=True,

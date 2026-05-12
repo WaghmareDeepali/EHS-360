@@ -108,7 +108,6 @@
                                         {% endfor %}
                                     </td>
                                 </tr>
-                                {% if schedule.zones.all %}
                                 <tr>
                                     <th>Zones</th>
                                     <td>
@@ -121,8 +120,6 @@
                                         {% endfor %}
                                     </td>
                                 </tr>
-                                {% endif %}
-                                {% if schedule.locations.all %}
                                 <tr>
                                     <th>Locations</th>
                                     <td>
@@ -135,8 +132,6 @@
                                         {% endfor %}
                                     </td>
                                 </tr>
-                                {% endif %}
-                                {% if schedule.sublocations.all %}
                                 <tr>
                                     <th>Sub-Locations</th>
                                     <td>
@@ -149,7 +144,6 @@
                                         {% endfor %}
                                     </td>
                                 </tr>
-                                {% endif %}
                                 {% if schedule.department %}
                                 <tr>
                                     <th>Department</th>
@@ -163,23 +157,10 @@
                                 <tr>
                                     <th>Due Date</th>
                                     <td>
-
-                                        {% if schedule.template.inspection_type == 'DAILY' %}
-
-                                            {{ schedule.scheduled_date|date:"d M Y" }}
-
-                                        {% else %}
-
-                                            {{ schedule.due_date|date:"d M Y" }}
-
-                                        {% endif %}
-
+                                        {{ schedule.due_date|date:"d M Y" }}
                                         {% if schedule.is_overdue %}
-                                            <span class="badge badge-danger ml-2">
-                                                Overdue
-                                            </span>
+                                            <span class="badge badge-danger ml-2">Overdue</span>
                                         {% endif %}
-
                                     </td>
                                 </tr>
                                 {% if schedule.assignment_notes %}
@@ -195,10 +176,7 @@
                                 <tr>
                                     <th>End Date</th>
                                     <td>
-                                        {{ schedule.due_date|date:"d M Y" }}
-                                        {% if schedule.is_overdue %}
-                                        <span class="badge badge-danger ml-2">Overdue</span>
-                                        {% endif %}
+                                        {{ schedule.scheduled_end_date|date:"d M Y" }}
                                     </td>
                                 </tr>
                                 {% if schedule.started_at %}
@@ -335,7 +313,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var offset =
         {{ schedule.auto_schedule_config.due_date_offset_days|default:1 }};
 
-    var now = new Date();
+    var now = new Date(
+        "{{ schedule.scheduled_date|date:'Y-m-d' }}"
+    );
 
     var startDate = new Date(now);
 

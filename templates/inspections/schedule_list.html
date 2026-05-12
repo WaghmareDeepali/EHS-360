@@ -179,7 +179,7 @@
                                 </td>
                                 <td>{{ schedule.scheduled_date|date:"d M Y" }}</td>
                                 <td>
-                                    {{ schedule.display_due_date|date:"d M Y" }}
+                                    {{ schedule.due_date|date:"d M Y" }}
                                     {% if schedule.is_overdue %}
                                     <span class="badge badge-danger ml-1">Overdue</span>
                                     {% endif %}
