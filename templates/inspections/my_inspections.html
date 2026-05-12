@@ -59,7 +59,8 @@
     <div class="card-body">
         <form method="get" class="form-inline">
             <label class="mr-2">Filter by Status:</label>
-            <select name="status" class="form-control mr-2">
+            <select name="status" class="form-control mr-2">\
+                <option value="">All</option>
                 {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
                     {{ label }}
@@ -110,7 +111,7 @@
                         </td>
                         <td>{{ schedule.scheduled_date|date:"d M Y" }}</td>
                         <td>
-                            {{ schedule.display_due_date|date:"d M Y" }}
+                            {{ schedule.due_date|date:"d M Y" }}
                             {% if schedule.is_overdue %}
                             <br><span class="badge badge-danger">Overdue</span>
                             {% endif %}
