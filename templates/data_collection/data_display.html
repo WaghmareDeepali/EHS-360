@@ -187,6 +187,25 @@
 .attachment-link:hover {
     color: var(--primary-color);
 }
+.attachment-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    color: #1e40af;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.attachment-btn:hover {
+    color: #1e3a8a;
+    background: #dbeafe;
+    text-decoration: none;
+}
 /* ✅ END: New CSS for attachment link */
 
 @media (max-width: 1024px) {
@@ -282,10 +301,10 @@
                         {{ item.value }}
                         {% if item.attachment %}
                             <a href="{% url 'environmental:attachment-download' item.attachment.id %}"
-                               class="attachment-link"
+                               class="attachment-btn"
                                title="Download: {{ item.attachment.file_name }}"
                                target="_blank">
-                                <i class="fas fa-paperclip"></i>
+                                <i class="fas fa-paperclip"></i> Attachment
                             </a>
                         {% endif %}
                     </td>
