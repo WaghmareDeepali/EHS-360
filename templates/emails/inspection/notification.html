@@ -68,15 +68,32 @@
                                         <h3 style="margin:0 0 12px; color:#4CAF50; font-size:16px;">
                                             📍 Location Details
                                         </h3>
-                                        <p><strong>Plant:</strong> {{ schedule.plant.name }}</p>
-                                        {% if schedule.zone %}
-                                            <p><strong>Zone:</strong> {{ schedule.zone.name }}</p>
+                                        <p>
+                                            <strong>Plant:</strong>
+                                            {% if schedule.plants.exists %}
+                                                {% for plant in schedule.plants.all %}
+                                                    {{ plant.name }}{% if not forloop.last %}, {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </p>
+                                        {% if schedule.zones.exists %}
+                                        <p>
+                                            <strong>Zone:</strong>
+                                            {% for zone in schedule.zones.all %}
+                                                {{ zone.name }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </p>
                                         {% endif %}
-                                        {% if schedule.location %}
-                                            <p><strong>Location:</strong> {{ schedule.location.name }}</p>
-                                        {% endif %}
-                                        {% if schedule.department %}
-                                            <p><strong>Department:</strong> {{ schedule.department.name }}</p>
+
+                                        {% if schedule.locations.exists %}
+                                        <p>
+                                            <strong>Location:</strong>
+                                            {% for location in schedule.locations.all %}
+                                                {{ location.name }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </p>
                                         {% endif %}
                                     </td>
                                 </tr>

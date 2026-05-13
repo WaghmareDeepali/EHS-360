@@ -10,6 +10,96 @@
 <li class="breadcrumb-item active">{{ schedule.schedule_code }}</li>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    max-height: 350px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    padding: 15px;
+    border-radius: 5px;
+    background: #f8f9fa;
+  }
+
+  .checkbox-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .checkbox-item:hover {
+    background: #e7f3ff;
+    border-color: #b8d4f0;
+  }
+
+  .checkbox-item input[type="checkbox"] {
+    margin-right: 10px;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  .checkbox-item label {
+    margin: 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+
+  .select-all-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    background: #e9ecef;
+    border-radius: 5px;
+  }
+
+  .group-header {
+    grid-column: 1 / -1;
+    background: #d1ecf1;
+    padding: 7px 12px;
+    font-weight: 600;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #0c5460;
+    border-left: 3px solid #17a2b8;
+  }
+
+  .section-label {
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge-count {
+    background: #007bff;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .loading-text {
+    color: #6c757d;
+    font-style: italic;
+    padding: 10px;
+    grid-column: 1 / -1;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <form method="post" action="{% url 'inspections:inspection_submit' schedule.id %}" enctype="multipart/form-data">
     {% csrf_token %}
@@ -34,7 +124,7 @@
             <div class="row">
                 <div class="col-md-3">
                     <strong><i class="fas fa-industry"></i> Plant:</strong><br>
-                        {% for plant in schedule.assigned_to.assigned_plants.all %}
+                        {% for plant in schedule.plants.all %}
                             <span class="badge badge-info">{{ plant.name }}</span>
                         {% empty %}
                             -
@@ -59,6 +149,89 @@
                 {{ schedule.assignment_notes }}
             </div>
             {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header" style="background: linear-gradient(135deg, #0f766e, #0ea5e9); color: white;">
+            <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Inspection Scope</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-4">
+                <div class="section-label">
+                    <span>Plants <span class="text-danger">*</span></span>
+                    <span class="badge-count" id="plantCount">0</span>
+                </div>
+                <small class="form-text text-muted mb-2 d-block">Select one or more plants</small>
+                <div class="select-all-bar">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll('plant-checkbox', updatePlantCount)">
+                        <i class="fas fa-check-square mr-1"></i> Select All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll('plant-checkbox', updatePlantCount)">
+                        <i class="fas fa-square mr-1"></i> Deselect All
+                    </button>
+                </div>
+                <div class="checkbox-grid" id="plantsGrid">
+                    <div class="loading-text">Loading plants...</div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="section-label">
+                    <span>Zones</span>
+                    <span class="badge-count" id="zoneCount">0</span>
+                </div>
+                <small class="form-text text-muted mb-2 d-block">Select plants first, then select zones</small>
+                <div class="select-all-bar" id="zoneSelectBar" style="display:none;">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll('zone-checkbox', updateZoneCount)">
+                        <i class="fas fa-check-square mr-1"></i> Select All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll('zone-checkbox', updateZoneCount)">
+                        <i class="fas fa-square mr-1"></i> Deselect All
+                    </button>
+                </div>
+                <div class="checkbox-grid" id="zonesGrid">
+                    <div class="loading-text">Please select plants first</div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="section-label">
+                    <span>Locations</span>
+                    <span class="badge-count" id="locationCount">0</span>
+                </div>
+                <small class="form-text text-muted mb-2 d-block">Select zones first, then select locations</small>
+                <div class="select-all-bar" id="locationSelectBar" style="display:none;">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll('location-checkbox', updateLocationCount)">
+                        <i class="fas fa-check-square mr-1"></i> Select All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll('location-checkbox', updateLocationCount)">
+                        <i class="fas fa-square mr-1"></i> Deselect All
+                    </button>
+                </div>
+                <div class="checkbox-grid" id="locationsGrid">
+                    <div class="loading-text">Please select zones first</div>
+                </div>
+            </div>
+
+            <div class="mb-0">
+                <div class="section-label">
+                    <span>Sub-Locations</span>
+                    <span class="badge-count" id="sublocationCount">0</span>
+                </div>
+                <small class="form-text text-muted mb-2 d-block">Select locations first, then select sub-locations</small>
+                <div class="select-all-bar" id="sublocationSelectBar" style="display:none;">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll('sublocation-checkbox', updateSublocationCount)">
+                        <i class="fas fa-check-square mr-1"></i> Select All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll('sublocation-checkbox', updateSublocationCount)">
+                        <i class="fas fa-square mr-1"></i> Deselect All
+                    </button>
+                </div>
+                <div class="checkbox-grid" id="sublocationsGrid">
+                    <div class="loading-text">Please select locations first</div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -289,7 +462,354 @@
 
 {% block extra_js %}
 <script>
+const selectedPlantIds = {{ selected_plant_ids|default:"[]"|safe }};
+const selectedZoneIds = {{ selected_zone_ids|default:"[]"|safe }};
+const selectedLocationIds = {{ selected_location_ids|default:"[]"|safe }};
+const selectedSublocationIds = {{ selected_sublocation_ids|default:"[]"|safe }};
+
+const allowedPlantIds = {{ allowed_plant_ids|default:"[]"|safe }};
+const allowedZoneIds = {{ allowed_zone_ids|default:"[]"|safe }};
+const allowedLocationIds = {{ allowed_location_ids|default:"[]"|safe }};
+const allowedSublocationIds = {{ allowed_sublocation_ids|default:"[]"|safe }};
+
+function selectAll(cls, countFn) {
+    document.querySelectorAll('.' + cls).forEach(function (cb) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change'));
+    });
+    if (countFn) {
+        countFn();
+    }
+}
+
+function deselectAll(cls, countFn) {
+    document.querySelectorAll('.' + cls).forEach(function (cb) {
+        cb.checked = false;
+        cb.dispatchEvent(new Event('change'));
+    });
+    if (countFn) {
+        countFn();
+    }
+}
+
+function updatePlantCount() {
+    document.getElementById('plantCount').textContent =
+        document.querySelectorAll('.plant-checkbox:checked').length;
+}
+
+function updateZoneCount() {
+    document.getElementById('zoneCount').textContent =
+        document.querySelectorAll('.zone-checkbox:checked').length;
+}
+
+function updateLocationCount() {
+    document.getElementById('locationCount').textContent =
+        document.querySelectorAll('.location-checkbox:checked').length;
+}
+
+function updateSublocationCount() {
+    document.getElementById('sublocationCount').textContent =
+        document.querySelectorAll('.sublocation-checkbox:checked').length;
+}
+
+function getCheckedValues(selector) {
+    const values = [];
+    document.querySelectorAll(selector + ':checked').forEach(function (cb) {
+        values.push(parseInt(cb.value, 10));
+    });
+    return values;
+}
+
+function resetGrid(gridId, message) {
+    document.getElementById(gridId).innerHTML =
+        '<div class="loading-text">' + message + '</div>';
+}
+
+function buildCheckboxItem(name, value, id, labelHtml, cssClass, onChangeFn) {
+    const div = document.createElement('div');
+    div.className = 'checkbox-item';
+    div.innerHTML =
+        '<input type="checkbox" name="' + name + '" value="' + value + '" id="' + id + '" class="' + cssClass + '">' +
+        '<label for="' + id + '">' + labelHtml + '</label>';
+    div.querySelector('input').addEventListener('change', onChangeFn);
+    return div;
+}
+
+function buildGroupHeader(text, icon) {
+    const div = document.createElement('div');
+    div.className = 'group-header';
+    div.innerHTML = '<i class="fas fa-' + icon + ' mr-2"></i>' + text;
+    return div;
+}
+
+function loadPlants() {
+    const grid = document.getElementById('plantsGrid');
+    grid.innerHTML = '<div class="loading-text">Loading plants...</div>';
+
+    fetch('/organizations/ajax/get-all-plants/')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            const plants = data.filter(function (plant) {
+                return allowedPlantIds.includes(plant.id);
+            });
+
+            grid.innerHTML = '';
+            if (!plants.length) {
+                grid.innerHTML = '<div class="loading-text">No plants available</div>';
+                updatePlantCount();
+                return;
+            }
+
+            plants.forEach(function (plant) {
+                const item = buildCheckboxItem(
+                    'selected_plants',
+                    plant.id,
+                    'plant_' + plant.id,
+                    '<strong>' + plant.name + '</strong>' +
+                    (plant.code ? ' <small class="text-muted">(' + plant.code + ')</small>' : ''),
+                    'plant-checkbox',
+                    function () {
+                        updatePlantCount();
+                        loadZonesForPlants();
+                    }
+                );
+
+                if (selectedPlantIds.includes(plant.id)) {
+                    item.querySelector('input').checked = true;
+                }
+
+                grid.appendChild(item);
+            });
+
+            updatePlantCount();
+            loadZonesForPlants();
+        })
+        .catch(function () {
+            grid.innerHTML = '<div class="loading-text text-danger">Error loading plants</div>';
+        });
+}
+
+function loadZonesForPlants() {
+    const plantIds = getCheckedValues('.plant-checkbox');
+    const grid = document.getElementById('zonesGrid');
+    const bar = document.getElementById('zoneSelectBar');
+
+    resetGrid('locationsGrid', 'Please select zones first');
+    resetGrid('sublocationsGrid', 'Please select locations first');
+    document.getElementById('locationSelectBar').style.display = 'none';
+    document.getElementById('sublocationSelectBar').style.display = 'none';
+    updateLocationCount();
+    updateSublocationCount();
+
+    if (!plantIds.length) {
+        resetGrid('zonesGrid', 'Please select plants first');
+        bar.style.display = 'none';
+        updateZoneCount();
+        return;
+    }
+
+    grid.innerHTML = '<div class="loading-text">Loading zones...</div>';
+
+    fetch('/organizations/ajax/get-zones-by-plants/?plant_ids=' + plantIds.join(','))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            const zones = data.filter(function (zone) {
+                return allowedZoneIds.includes(zone.id);
+            });
+
+            grid.innerHTML = '';
+            if (!zones.length) {
+                grid.innerHTML = '<div class="loading-text">No zones in selected plants</div>';
+                bar.style.display = 'none';
+                updateZoneCount();
+                return;
+            }
+
+            const grouped = {};
+            zones.forEach(function (zone) {
+                if (!grouped[zone.plant_name]) {
+                    grouped[zone.plant_name] = [];
+                }
+                grouped[zone.plant_name].push(zone);
+            });
+
+            Object.keys(grouped).forEach(function (plantName) {
+                grid.appendChild(buildGroupHeader(plantName, 'industry'));
+                grouped[plantName].forEach(function (zone) {
+                    const item = buildCheckboxItem(
+                        'selected_zones',
+                        zone.id,
+                        'zone_' + zone.id,
+                        '<strong>' + zone.name + '</strong>' +
+                        (zone.code ? ' <small class="text-muted">(' + zone.code + ')</small>' : ''),
+                        'zone-checkbox',
+                        function () {
+                            updateZoneCount();
+                            loadLocationsForZones();
+                        }
+                    );
+
+                    if (selectedZoneIds.includes(zone.id)) {
+                        item.querySelector('input').checked = true;
+                    }
+
+                    grid.appendChild(item);
+                });
+            });
+
+            bar.style.display = 'flex';
+            updateZoneCount();
+            loadLocationsForZones();
+        })
+        .catch(function () {
+            grid.innerHTML = '<div class="loading-text text-danger">Error loading zones</div>';
+        });
+}
+
+function loadLocationsForZones() {
+    const zoneIds = getCheckedValues('.zone-checkbox');
+    const grid = document.getElementById('locationsGrid');
+    const bar = document.getElementById('locationSelectBar');
+
+    resetGrid('sublocationsGrid', 'Please select locations first');
+    document.getElementById('sublocationSelectBar').style.display = 'none';
+    updateSublocationCount();
+
+    if (!zoneIds.length) {
+        resetGrid('locationsGrid', 'Please select zones first');
+        bar.style.display = 'none';
+        updateLocationCount();
+        return;
+    }
+
+    grid.innerHTML = '<div class="loading-text">Loading locations...</div>';
+
+    fetch('/organizations/ajax/get-locations-by-zones/?zone_ids=' + zoneIds.join(','))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            const locations = data.filter(function (location) {
+                return allowedLocationIds.includes(location.id);
+            });
+
+            grid.innerHTML = '';
+            if (!locations.length) {
+                grid.innerHTML = '<div class="loading-text">No locations in selected zones</div>';
+                bar.style.display = 'none';
+                updateLocationCount();
+                return;
+            }
+
+            const grouped = {};
+            locations.forEach(function (location) {
+                if (!grouped[location.zone_name]) {
+                    grouped[location.zone_name] = [];
+                }
+                grouped[location.zone_name].push(location);
+            });
+
+            Object.keys(grouped).forEach(function (zoneName) {
+                grid.appendChild(buildGroupHeader(zoneName, 'map-pin'));
+                grouped[zoneName].forEach(function (location) {
+                    const item = buildCheckboxItem(
+                        'selected_locations',
+                        location.id,
+                        'location_' + location.id,
+                        '<strong>' + location.name + '</strong>' +
+                        (location.code ? ' <small class="text-muted">(' + location.code + ')</small>' : ''),
+                        'location-checkbox',
+                        function () {
+                            updateLocationCount();
+                            loadSublocationsForLocations();
+                        }
+                    );
+
+                    if (selectedLocationIds.includes(location.id)) {
+                        item.querySelector('input').checked = true;
+                    }
+
+                    grid.appendChild(item);
+                });
+            });
+
+            bar.style.display = 'flex';
+            updateLocationCount();
+            loadSublocationsForLocations();
+        })
+        .catch(function () {
+            grid.innerHTML = '<div class="loading-text text-danger">Error loading locations</div>';
+        });
+}
+
+function loadSublocationsForLocations() {
+    const locationIds = getCheckedValues('.location-checkbox');
+    const grid = document.getElementById('sublocationsGrid');
+    const bar = document.getElementById('sublocationSelectBar');
+
+    if (!locationIds.length) {
+        resetGrid('sublocationsGrid', 'Please select locations first');
+        bar.style.display = 'none';
+        updateSublocationCount();
+        return;
+    }
+
+    grid.innerHTML = '<div class="loading-text">Loading sub-locations...</div>';
+
+    fetch('/organizations/ajax/get-sublocations-by-locations/?location_ids=' + locationIds.join(','))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            const sublocations = data.filter(function (sublocation) {
+                return allowedSublocationIds.includes(sublocation.id);
+            });
+
+            grid.innerHTML = '';
+            if (!sublocations.length) {
+                grid.innerHTML = '<div class="loading-text">No sub-locations in selected locations</div>';
+                bar.style.display = 'none';
+                updateSublocationCount();
+                return;
+            }
+
+            const grouped = {};
+            sublocations.forEach(function (sublocation) {
+                if (!grouped[sublocation.location_name]) {
+                    grouped[sublocation.location_name] = [];
+                }
+                grouped[sublocation.location_name].push(sublocation);
+            });
+
+            Object.keys(grouped).forEach(function (locationName) {
+                grid.appendChild(buildGroupHeader(locationName, 'map-marker-alt'));
+                grouped[locationName].forEach(function (sublocation) {
+                    const item = buildCheckboxItem(
+                        'selected_sublocations',
+                        sublocation.id,
+                        'sublocation_' + sublocation.id,
+                        sublocation.name + (sublocation.code ? ' <small class="text-muted">(' + sublocation.code + ')</small>' : ''),
+                        'sublocation-checkbox',
+                        function () {
+                            updateSublocationCount();
+                        }
+                    );
+
+                    if (selectedSublocationIds.includes(sublocation.id)) {
+                        item.querySelector('input').checked = true;
+                    }
+
+                    grid.appendChild(item);
+                });
+            });
+
+            bar.style.display = 'flex';
+            updateSublocationCount();
+        })
+        .catch(function () {
+            grid.innerHTML = '<div class="loading-text text-danger">Error loading sub-locations</div>';
+        });
+}
+
 $(document).ready(function() {
+    loadPlants();
+
     // Auto-resize textareas
     $('textarea').each(function() {
         this.setAttribute('style', 'height:' + (this.scrollHeight) + 'px;overflow-y:hidden;');
@@ -313,6 +833,12 @@ $(document).ready(function() {
         if (unanswered.length > 0) {
             e.preventDefault();
             alert('Please answer all mandatory questions before submitting!');
+            return false;
+        }
+
+        if (!document.querySelectorAll('.plant-checkbox:checked').length) {
+            e.preventDefault();
+            alert('Please select at least one plant before submitting this inspection.');
             return false;
         }
     });

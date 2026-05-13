@@ -29,6 +29,95 @@ from apps.organizations.models import Plant, Zone, Location, SubLocation
 # DASHBOARD
 # ====================================
 
+
+def _build_scope_queryset(schedule_queryset, user_queryset, primary_id=None, child_model=None, child_filter=None):
+    if schedule_queryset.exists():
+        return schedule_queryset
+    if user_queryset.exists():
+        return user_queryset
+    if primary_id:
+        return child_model.objects.filter(pk=primary_id)
+    if child_model and child_filter:
+        return child_model.objects.filter(**child_filter)
+    return child_model.objects.none() if child_model else schedule_queryset.none()
+
+
+def _get_inspection_scope(schedule):
+    plants = schedule.plants.filter(is_active=True).order_by('name').distinct()
+
+    zones = schedule.zones.filter(is_active=True)
+    if not zones.exists() and plants.exists():
+        zones = Zone.objects.filter(plant__in=plants, is_active=True)
+    zones = zones.order_by('name').distinct()
+
+    locations = schedule.locations.filter(is_active=True)
+    if not locations.exists() and zones.exists():
+        locations = Location.objects.filter(zone__in=zones, is_active=True)
+    locations = locations.order_by('name').distinct()
+
+    sublocations = schedule.sublocations.filter(is_active=True)
+    if not sublocations.exists() and locations.exists():
+        sublocations = SubLocation.objects.filter(location__in=locations, is_active=True)
+    sublocations = sublocations.order_by('name').distinct()
+
+    return {
+        'plants': plants,
+        'zones': zones,
+        'locations': locations,
+        'sublocations': sublocations,
+    }
+
+
+def _clone_schedule_as_scheduled(source_schedule, assignment_notes=None):
+    """
+    Create a fresh schedule record by copying the source schedule's data while
+    resetting lifecycle fields so the new record stays scheduled.
+    """
+    plants = list(source_schedule.plants.all())
+    zones = list(source_schedule.zones.all())
+    locations = list(source_schedule.locations.all())
+    sublocations = list(source_schedule.sublocations.all())
+    assigned_users = list(source_schedule.assigned_users.all())
+
+    new_schedule = InspectionSchedule.objects.get(pk=source_schedule.pk)
+    new_schedule.pk = None
+    new_schedule.id = None
+    new_schedule.schedule_code = None
+    new_schedule.status = 'SCHEDULED'
+    new_schedule.started_at = None
+    new_schedule.closed_at = None
+    new_schedule.reminder_sent = False
+    new_schedule.reminder_sent_at = None
+
+    today = timezone.now().date()
+    due_offset = max((source_schedule.due_date - source_schedule.scheduled_date).days, 0)
+    new_schedule.scheduled_date = today
+    new_schedule.due_date = today + timedelta(days=due_offset)
+
+    if source_schedule.scheduled_end_date:
+        end_offset = max(
+            (source_schedule.scheduled_end_date - source_schedule.scheduled_date).days,
+            due_offset,
+        )
+        new_schedule.scheduled_end_date = today + timedelta(days=end_offset)
+
+    if assignment_notes is not None:
+        new_schedule.assignment_notes = assignment_notes
+
+    # Save first so M2M fields can be restored on the new schedule instance.
+    new_schedule.save()
+
+    if new_schedule.status != 'SCHEDULED':
+        InspectionSchedule.objects.filter(pk=new_schedule.pk).update(status='SCHEDULED')
+        new_schedule.status = 'SCHEDULED'
+
+    new_schedule.plants.set(plants)
+    new_schedule.zones.set(zones)
+    new_schedule.locations.set(locations)
+    new_schedule.sublocations.set(sublocations)
+    new_schedule.assigned_users.set(assigned_users)
+    return new_schedule
+
 # @login_required
 # def inspection_dashboard(request):
 #     """Main inspection dashboard"""
@@ -940,8 +1029,8 @@ def schedule_edit(request, pk):
     
     # Check permissions
     if not request.user.is_superuser and not request.user.is_admin_user:
-        if schedule.status in ['COMPLETED', 'CANCELLED']:
-            messages.error(request, 'Cannot edit completed or cancelled inspections!')
+        if schedule.status in ['CLOSED', 'LATE_CLOSE', 'CANCELLED']:
+            messages.error(request, 'Cannot edit CLOSED or cancelled inspections!')
             return redirect('inspections:schedule_detail', pk=pk)
     
     if request.method == 'POST':
@@ -1086,9 +1175,16 @@ def schedule_detail(request, pk):
     
     context = {
         'schedule': schedule,
-        'can_edit': schedule.status not in ['COMPLETED', 'CANCELLED'],
+        'can_edit': schedule.status not in ['CLOSED', 'LATE_CLOSE', 'CANCELLED'],
         'can_start': schedule.status == 'SCHEDULED' and schedule.assigned_to == request.user,
-        'can_cancel': schedule.status not in ['COMPLETED', 'CANCELLED']
+        'can_cancel': schedule.status not in ['CLOSED', 'LATE_CLOSE', 'CANCELLED'],
+        'can_restart': (
+            schedule.status == 'OVERDUE' and (
+                request.user == schedule.assigned_to or
+                request.user.is_superuser or
+                request.user.is_admin_user
+            )
+        ),
     }
     return render(request, 'inspections/schedule_detail.html', context)
 @login_required
@@ -1159,8 +1255,8 @@ def schedule_cancel(request, pk):
     
     schedule = get_object_or_404(InspectionSchedule, pk=pk)
     
-    if schedule.status in ['COMPLETED', 'CANCELLED']:
-        messages.error(request, 'Cannot cancel completed or already cancelled inspections!')
+    if schedule.status in ['CLOSED', 'LATE_CLOSE', 'CANCELLED']:
+        messages.error(request, 'Cannot cancel CLOSED or already cancelled inspections!')
         return redirect('inspections:schedule_detail', pk=pk)
     
     if request.method == 'POST':
@@ -1213,7 +1309,7 @@ def my_inspections(request):
     
     schedules = InspectionSchedule.objects.filter(
         assigned_to=request.user
-    ).select_related('template', 'department')
+    ).select_related('template', 'department').order_by('-scheduled_date', '-created_at')
     
     # Filters
     status = request.GET.get('status')
@@ -1237,9 +1333,9 @@ def my_inspections(request):
             assigned_to=request.user,
             status='IN_PROGRESS'
         ).count(),
-        'completed': InspectionSchedule.objects.filter(
+        'CLOSED': InspectionSchedule.objects.filter(
             assigned_to=request.user,
-            status='COMPLETED'
+            status__in=['CLOSED', 'LATE_CLOSE']
         ).count(),
         'overdue': InspectionSchedule.objects.filter(
             assigned_to=request.user,
@@ -1268,9 +1364,9 @@ def inspection_start(request, schedule_id):
         messages.error(request, 'You are not authorized to access this inspection!')
         return redirect('inspections:my_inspections')
     
-    # Check if already completed
-    if schedule.status == 'COMPLETED':
-        messages.warning(request, 'This inspection is already completed!')
+    # Check if already CLOSED
+    if schedule.status in ['CLOSED', 'LATE_CLOSE']:
+        messages.warning(request, 'This inspection is already CLOSED!')
         return redirect('inspections:schedule_detail', pk=schedule.pk)
     
     # Update status to IN_PROGRESS
@@ -1296,11 +1392,29 @@ def inspection_start(request, schedule_id):
     
     # Sort by category display order
     questions_by_category = dict(questions_by_category.items()) #removed - ,sorted(key=lambda x: x[0].display_order)
-    
+
+    inspection_scope = _get_inspection_scope(schedule)
+    available_plants = inspection_scope['plants']
+    available_zones = inspection_scope['zones']
+    available_locations = inspection_scope['locations']
+    available_sublocations = inspection_scope['sublocations']
+
     context = {
         'schedule': schedule,
         'questions_by_category': questions_by_category,
-        'total_questions': template_questions.count()
+        'total_questions': template_questions.count(),
+        'available_plants': available_plants,
+        'available_zones': available_zones,
+        'available_locations': available_locations,
+        'available_sublocations': available_sublocations,
+        'selected_plant_ids': [],
+        'selected_zone_ids': [],
+        'selected_location_ids': [],
+        'selected_sublocation_ids': [],
+        'allowed_plant_ids': list(available_plants.values_list('id', flat=True)),
+        'allowed_zone_ids': list(available_zones.values_list('id', flat=True)),
+        'allowed_location_ids': list(available_locations.values_list('id', flat=True)),
+        'allowed_sublocation_ids': list(available_sublocations.values_list('id', flat=True)),
     }
     
     return render(request, 'inspections/inspection_form.html', context)
@@ -1328,9 +1442,14 @@ def generate_finding_code(submission):
     return f"FIND-{date_str}-{new_num:04d}"
 @login_required
 def inspection_submit(request, schedule_id):
-    """HOD submits the completed inspection"""
+    """HOD submits the CLOSED inspection"""
     
-    schedule = get_object_or_404(InspectionSchedule.objects.select_related('template', 'assigned_to'), pk=schedule_id)
+    schedule = get_object_or_404(
+        InspectionSchedule.objects.select_related('template', 'assigned_to', 'assigned_by').prefetch_related(
+            'plants', 'zones', 'locations', 'sublocations'
+        ),
+        pk=schedule_id
+    )
 
     # Check permission
     if schedule.assigned_to != request.user:
@@ -1342,6 +1461,52 @@ def inspection_submit(request, schedule_id):
         return redirect('inspections:inspection_start', schedule_id=schedule_id)
     try:
         with transaction.atomic():
+            inspection_scope = _get_inspection_scope(schedule)
+            available_plants = inspection_scope['plants']
+            available_zones = inspection_scope['zones']
+            available_locations = inspection_scope['locations']
+            available_sublocations = inspection_scope['sublocations']
+
+            def _resolve_selected_ids(field_name, available_qs):
+                allowed_ids = list(available_qs.values_list('id', flat=True))
+                selected_ids = request.POST.getlist(field_name)
+                resolved_ids = []
+                for raw_id in selected_ids:
+                    try:
+                        parsed_id = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_id in allowed_ids and parsed_id not in resolved_ids:
+                        resolved_ids.append(parsed_id)
+                return resolved_ids
+
+            selected_plant_ids = _resolve_selected_ids('selected_plants', available_plants)
+            selected_zone_ids = _resolve_selected_ids(
+                'selected_zones',
+                available_zones.filter(plant_id__in=selected_plant_ids).distinct()
+            )
+            selected_location_ids = _resolve_selected_ids(
+                'selected_locations',
+                available_locations.filter(zone_id__in=selected_zone_ids).distinct()
+            )
+            selected_sublocation_ids = _resolve_selected_ids(
+                'selected_sublocations',
+                available_sublocations.filter(location_id__in=selected_location_ids).distinct()
+            )
+
+            if available_plants.exists() and not selected_plant_ids:
+                messages.error(request, 'Please select at least one plant for this inspection.')
+                return redirect('inspections:inspection_start', schedule_id=schedule_id)
+            if available_zones.filter(plant_id__in=selected_plant_ids).exists() and not selected_zone_ids:
+                messages.error(request, 'Please select at least one zone for this inspection.')
+                return redirect('inspections:inspection_start', schedule_id=schedule_id)
+            if available_locations.filter(zone_id__in=selected_zone_ids).exists() and not selected_location_ids:
+                messages.error(request, 'Please select at least one location for this inspection.')
+                return redirect('inspections:inspection_start', schedule_id=schedule_id)
+            if available_sublocations.filter(location_id__in=selected_location_ids).exists() and not selected_sublocation_ids:
+                messages.error(request, 'Please select at least one sub-location for this inspection.')
+                return redirect('inspections:inspection_start', schedule_id=schedule_id)
+
             # Create submission 
             submission = InspectionSubmission.objects.create(
                 schedule=schedule,
@@ -1395,14 +1560,22 @@ def inspection_submit(request, schedule_id):
             # Calculate compliance 
             submission.compliance_score = submission.calculate_compliance_score()
             submission.save()
+            if selected_plant_ids:
+                schedule.plants.set(Plant.objects.filter(id__in=selected_plant_ids, is_active=True))
+            if selected_zone_ids:
+                schedule.zones.set(Zone.objects.filter(id__in=selected_zone_ids, is_active=True))
+            if selected_location_ids:
+                schedule.locations.set(Location.objects.filter(id__in=selected_location_ids, is_active=True))
+            if selected_sublocation_ids:
+                schedule.sublocations.set(SubLocation.objects.filter(id__in=selected_sublocation_ids, is_active=True))
             # Update schedule 
-            schedule.status = 'COMPLETED'
-            schedule.completed_at = timezone.now()
-            schedule.save(update_fields=['status', 'completed_at'])
+            schedule.status = 'LATE_CLOSE' if '[RESTARTED_FROM:' in (schedule.assignment_notes or '') else 'CLOSED'
+            schedule.closed_at = timezone.now()
+            schedule.save(update_fields=['status', 'closed_at'])
             # Send notification 
             NotificationService.notify(
                 content_object=submission,
-                notification_type='INSPECTION_COMPLETED',
+                notification_type='INSPECTION_SUBMITTED',
                 module='INSPECTION'
             )
             messages.success(request,f'Inspection {schedule.schedule_code} submitted successfully! '
@@ -1415,7 +1588,7 @@ def inspection_submit(request, schedule_id):
 
 @login_required
 def inspection_review(request, submission_id):
-    """Review completed inspection showing ALL answers and details."""
+    """Review CLOSED inspection showing ALL answers and details."""
     
     submission = get_object_or_404(
         InspectionSubmission.objects
@@ -2000,7 +2173,7 @@ def convert_no_answer_to_hazard(request, response_id):
             hazard.immediate_action = request.POST.get('immediate_action', '')
 
             # Dates
-            hazard.incident_datetime = response.answered_at or schedule.completed_at or timezone.now()
+            hazard.incident_datetime = response.answered_at or schedule.closed_at or timezone.now()
             hazard.status = 'REPORTED'
             hazard.approval_status = 'PENDING'
 
@@ -2100,7 +2273,7 @@ class InspectionDashboardView(LoginRequiredMixin, TemplateView):
             else:
                 accessible_plants = assigned
 
-        # --- 2. Base Queryset for Completed Inspections (Filtered by accessible plants) ---
+        # --- 2. Base Queryset for CLOSED Inspections (Filtered by accessible plants) ---
         submissions = (
             InspectionSubmission.objects
             .select_related('schedule', 'schedule__template', 'submitted_by')
@@ -2167,27 +2340,15 @@ def schedule_clone(request, pk):
     schedule_code before saving. It then redirects to the list view.
     """
     # Fetch the original schedule to copy from.
-    original_schedule = get_object_or_404(InspectionSchedule, pk=pk)
+    original_schedule = get_object_or_404(
+        InspectionSchedule.objects.prefetch_related(
+            'plants', 'zones', 'locations', 'sublocations', 'assigned_users'
+        ),
+        pk=pk
+    )
     
-    # Keep track of the original code for the success message.
     original_code = original_schedule.schedule_code
-
-    # --- CORRECTION IS HERE ---
-    # By setting the primary key and the unique code to None, Django
-    # knows to create a completely new instance with a new identity.
-    original_schedule.pk = None
-    original_schedule.id = None
-    original_schedule.schedule_code = None  # This is the critical fix!
-    
-    # Reset the status to 'SCHEDULED' for the new clone.
-    original_schedule.status = 'SCHEDULED'
-
-    # Set the user who performed the clone action.
-    original_schedule.assigned_by = request.user
-    
-    # Save the new object. The model will now generate a new schedule_code.
-    original_schedule.save()
-    new_schedule = original_schedule
+    new_schedule = _clone_schedule_as_scheduled(original_schedule)
     
     # Trigger a notification for the newly created schedule.
     NotificationService.notify(
@@ -2203,4 +2364,46 @@ def schedule_clone(request, pk):
     )
     
     # Redirect the user back to the list of schedules.
-    return redirect('inspections:schedule_list')
+    return redirect('inspections:schedule_detail', pk=new_schedule.pk)
+
+
+@login_required
+def schedule_restart(request, pk):
+    """Restart an overdue inspection as a fresh schedule and close it as late close on submission."""
+    original_schedule = get_object_or_404(
+        InspectionSchedule.objects.select_related('assigned_to', 'assigned_by').prefetch_related(
+            'plants', 'zones', 'locations', 'sublocations', 'assigned_users'
+        ),
+        pk=pk
+    )
+
+    if original_schedule.status != 'OVERDUE':
+        messages.error(request, 'Only overdue inspections can be restarted.')
+        return redirect('inspections:schedule_detail', pk=pk)
+
+    if not (
+        request.user == original_schedule.assigned_to or
+        request.user.is_superuser or
+        request.user.is_admin_user
+    ):
+        messages.error(request, 'You are not authorized to restart this inspection.')
+        return redirect('inspections:schedule_detail', pk=pk)
+
+    original_code = original_schedule.schedule_code
+    original_notes = original_schedule.assignment_notes or ''
+    restarted_schedule = _clone_schedule_as_scheduled(
+        original_schedule,
+        assignment_notes=f"[RESTARTED_FROM:{original_code}]\n{original_notes}".strip()
+    )
+
+    NotificationService.notify(
+        content_object=restarted_schedule,
+        notification_type='INSPECTION_SCHEDULE',
+        module='INSPECTION'
+    )
+
+    messages.success(
+        request,
+        f'Inspection "{original_code}" restarted successfully as {restarted_schedule.schedule_code}. Submit it to close as Late Close.'
+    )
+    return redirect('inspections:schedule_detail', pk=restarted_schedule.pk)

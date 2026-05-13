@@ -171,7 +171,7 @@
                                 <td>{{ schedule.template.template_name }}</td>
                                 <td>{{ schedule.assigned_to.get_full_name }}</td>
                                 <td>
-                                    {% for plant in schedule.assigned_to.assigned_plants.all %}
+                                    {% for plant in schedule.plants.all %}
                                         <span class="badge badge-info">{{ plant.name }}</span>
                                     {% empty %}
                                         -
@@ -188,7 +188,7 @@
                                     <span class="badge 
                                         {% if schedule.status == 'SCHEDULED' %}badge-primary
                                         {% elif schedule.status == 'IN_PROGRESS' %}badge-warning
-                                        {% elif schedule.status == 'COMPLETED' %}badge-success
+                                        {% elif schedule.status == 'COMPLETED' or schedule.status == 'LATE_CLOSE' %}badge-success
                                         {% elif schedule.status == 'OVERDUE' %}badge-danger
                                         {% else %}badge-secondary{% endif %}">
                                         {{ schedule.get_status_display }}
@@ -204,7 +204,7 @@
                                         </a>
                                         {% endif %}
                                         {% if user|has_perm:'EDIT_INSPECTION' %}
-                                        {% if schedule.status != 'COMPLETED' and schedule.status != 'CANCELLED' %}
+                                        {% if schedule.status != 'COMPLETED' and schedule.status != 'LATE_CLOSE' and schedule.status != 'CANCELLED' %}
                                         <a href="{% url 'inspections:schedule_edit' schedule.pk %}" 
                                         class="btn btn-sm btn-warning" title="Edit">
                                             <i class="fas fa-edit"></i>
@@ -215,6 +215,11 @@
                                         <a href="{% url 'inspections:schedule_clone' schedule.pk %}" class="btn btn-sm btn-secondary" title="Clone">
                                             <i class="fas fa-clone"></i>
                                         </a>
+                                        {% if schedule.status == 'OVERDUE' %}
+                                        <a href="{% url 'inspections:schedule_restart' schedule.pk %}" class="btn btn-sm btn-danger" title="Restart">
+                                            <i class="fas fa-redo"></i>
+                                        </a>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

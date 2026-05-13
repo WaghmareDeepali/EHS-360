@@ -389,7 +389,8 @@ class InspectionSchedule(models.Model):
     STATUS_CHOICES = [
         ('SCHEDULED', 'Scheduled'),
         ('IN_PROGRESS', 'In Progress'),
-        ('COMPLETED', 'Completed'),
+        ('CLOSED', 'Closed'),
+        ('LATE_CLOSE', 'Late Close'),
         ('OVERDUE', 'Overdue'),
         ('CANCELLED', 'Cancelled'),
     ]
@@ -475,10 +476,10 @@ class InspectionSchedule(models.Model):
         blank=True,
         verbose_name="Started At"
     )
-    completed_at = models.DateTimeField(
+    closed_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name="Completed At"
+        verbose_name="Closed At"
     )
     
     # Status
@@ -537,9 +538,9 @@ class InspectionSchedule(models.Model):
             self.schedule_code = self.generate_schedule_code()
         
         # Update status based on dates
-        if self.status not in ['COMPLETED', 'CANCELLED']:
-            if self.completed_at:
-                self.status = 'COMPLETED'
+        if self.status not in ['CLOSED', 'LATE_CLOSE', 'CANCELLED']:
+            if self.closed_at:
+                self.status = 'CLOSED'
             elif timezone.now().date() > self.due_date:
                 self.status = 'OVERDUE'
             elif self.started_at:
@@ -571,7 +572,7 @@ class InspectionSchedule(models.Model):
     def is_overdue(self):
         """Check if inspection is overdue"""
         return (
-            self.status not in ['COMPLETED', 'CANCELLED'] and
+            self.status not in ['CLOSED', 'LATE_CLOSE', 'CANCELLED'] and
             timezone.now().date() > self.due_date
         )
 class TemplateAutoScheduleConfig(models.Model):
@@ -657,7 +658,7 @@ class TemplateAutoScheduleConfig(models.Model):
         return self.STATUS_ACTIVE    
 
 class InspectionSubmission(models.Model):
-    """Stores the completed inspection submission"""
+    """Stores the CLOSED inspection submission"""
     
     schedule = models.OneToOneField(
         InspectionSchedule,

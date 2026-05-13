@@ -32,8 +32,14 @@
                 <i class="fas fa-ban"></i> Cancel Schedule
             </a>
             {% endif %}
+
+            {% if can_restart %}
+            <a href="{% url 'inspections:schedule_restart' schedule.pk %}" class="btn btn-danger">
+                <i class="fas fa-redo"></i> Restart Inspection
+            </a>
+            {% endif %}
             
-            {% if schedule.status not in 'COMPLETED,CANCELLED' %}
+            {% if schedule.status != 'COMPLETED' and schedule.status != 'LATE_CLOSE' and schedule.status != 'CANCELLED' %}
             <a href="{% url 'inspections:schedule_send_reminder' schedule.pk %}" class="btn btn-info" id="sendReminderBtn">
                 <i class="fas fa-bell"></i> Send Reminder
             </a>
@@ -52,7 +58,7 @@
                             <span class="badge 
                                 {% if schedule.status == 'SCHEDULED' %}badge-primary
                                 {% elif schedule.status == 'IN_PROGRESS' %}badge-warning
-                                {% elif schedule.status == 'COMPLETED' %}badge-success
+                                {% elif schedule.status == 'COMPLETED' or schedule.status == 'LATE_CLOSE' %}badge-success
                                 {% elif schedule.status == 'OVERDUE' %}badge-danger
                                 {% else %}badge-secondary{% endif %}">
                                 {{ schedule.get_status_display }}
@@ -99,7 +105,7 @@
                                 <tr>
                                     <th>Plants</th>
                                     <td>
-                                        {% for plant in schedule.assigned_to.assigned_plants.all %}
+                                        {% for plant in schedule.plants.all %}
                                             <span class="badge badge-primary mr-1">
                                                 {{ plant.name }}
                                             </span>
@@ -111,7 +117,7 @@
                                 <tr>
                                     <th>Zones</th>
                                     <td>
-                                        {% for zone in schedule.assigned_to.assigned_zones.all %}
+                                        {% for zone in schedule.zones.all %}
                                             <span class="badge badge-info mr-1">
                                                 {{ zone.name }}
                                             </span>
@@ -123,7 +129,7 @@
                                 <tr>
                                     <th>Locations</th>
                                     <td>
-                                        {% for location in schedule.assigned_to.assigned_locations.all %}
+                                        {% for location in schedule.locations.all %}
                                             <span class="badge badge-secondary mr-1">
                                                 {{ location.name }}
                                             </span>
@@ -135,7 +141,7 @@
                                 <tr>
                                     <th>Sub-Locations</th>
                                     <td>
-                                        {% for sublocation in schedule.assigned_to.assigned_sublocations.all %}
+                                        {% for sublocation in schedule.sublocations.all %}
                                             <span class="badge badge-dark mr-1">
                                                 {{ sublocation.name }}
                                             </span>

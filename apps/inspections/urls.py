@@ -39,6 +39,7 @@ urlpatterns = [
     path('schedules/<int:pk>/edit/', views.schedule_edit, name='schedule_edit'),
     path('schedules/<int:pk>/cancel/', views.schedule_cancel, name='schedule_cancel'),
     path('schedules/<int:pk>/send-reminder/', views.schedule_send_reminder, name='schedule_send_reminder'),
+    path('schedules/<int:pk>/restart/', views.schedule_restart, name='schedule_restart'),
     # path('inspection_dashboard/', views.InspectionDashboardView.as_view(), name='inspection_dashboard'), 
     path(
         "inspection_dashboard/",

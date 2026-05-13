@@ -234,6 +234,15 @@ class NotificationService:
             stakeholders = []
             if hasattr(content_object, 'assigned_to') and content_object.assigned_to:
                 stakeholders.append(content_object.assigned_to)
+            if hasattr(content_object, 'assigned_by') and content_object.assigned_by:
+                if content_object.assigned_by not in stakeholders:
+                    stakeholders.append(content_object.assigned_by)
+        elif notification_type == 'INSPECTION_SUBMITTED':
+            stakeholders = []
+            if hasattr(content_object, 'schedule'):
+                schedule = content_object.schedule
+                if schedule.assigned_by and schedule.assigned_by not in stakeholders:
+                    stakeholders.append(schedule.assigned_by)
         else:
             stakeholders = NotificationService.get_stakeholders_for_event(
                 event_type=notification_type,
@@ -297,6 +306,8 @@ class NotificationService:
             context = NotificationService._build_noncompliance_assigned_context(content_object)
         elif notification_type == 'INCIDENT_INVESTIGATION_OVERDUE':
             context = NotificationService._build_investigation_overdue_context(content_object)
+        elif notification_type == 'INSPECTION_SUBMITTED':
+            context = NotificationService._build_inspection_submitted_context(content_object)
         elif module == 'INSPECTION':
             context = NotificationService._build_inspection_context(content_object)
         else:
@@ -326,14 +337,22 @@ class NotificationService:
                 is_active=True
             ).first()
 
-            should_send_email = notification_type == 'INSPECTION_SCHEDULE' or is_responsible_user or (role_config and role_config.email_enabled)
+            should_send_email = (
+                notification_type in {'INSPECTION_SCHEDULE', 'INSPECTION_SUBMITTED'}
+                or is_responsible_user
+                or (role_config and role_config.email_enabled)
+            )
             if should_send_email:
                 context['recipient'] = stakeholder
                 email_sent = NotificationService.send_email(
                     recipient=stakeholder,
                     subject=context.get('subject', ''),
                     message=context.get('message', ''),
-                    html_template=f'emails/{module.lower()}/notification.html',
+                    html_template=(
+                        'emails/inspection_completed/notification.html'
+                        if notification_type == 'INSPECTION_SUBMITTED'
+                        else f'emails/{module.lower()}/notification.html'
+                    ),
                     context=context
                 )
 
@@ -657,7 +676,51 @@ EHS Management System
             'plant':plant,
             'dashboard_url':dashboard_url,
         }
-    
+
+    @staticmethod
+    def _build_inspection_submitted_context(submission):
+        schedule = submission.schedule
+
+        inspection_url = (
+            f"{settings.SITE_URL}"
+            f"{reverse('inspections:schedule_detail', args=[schedule.id])}"
+        )
+
+        return {
+            'title': f"Inspection Submitted | {schedule.schedule_code}",
+            'subject': f"✅ Inspection Submitted - {schedule.schedule_code}",
+            'message': f"""
+Hello {schedule.assigned_by.get_full_name()},
+
+An inspection has been submitted and requires your review.
+
+INSPECTION DETAILS
+--------------------------------------------------
+Schedule Code      : {schedule.schedule_code}
+Template           : {schedule.template.template_name}
+Inspection Type    : {schedule.template.get_inspection_type_display()}
+Status             : {schedule.get_status_display()}
+Compliance Score   : {submission.compliance_score}%
+
+ASSIGNED DETAILS
+--------------------------------------------------
+Assigned To        : {schedule.assigned_to.get_full_name()}
+Submitted By       : {submission.submitted_by.get_full_name()}
+Scheduled Date     : {schedule.scheduled_date}
+Due Date           : {schedule.due_date}
+Completed At       : {schedule.closed_at}
+
+Please log in to the EHS system to review.
+
+Regards,
+EHS Management System
+""",
+            'schedule': schedule,
+            'submission': submission,
+            'inspection_url': inspection_url,
+            'recipient': schedule.assigned_by,
+        }
+
     @staticmethod
     def _build_inspection_context(schedule):
         inspection_url = f"{settings.SITE_URL}{reverse('inspections:schedule_detail', args=[schedule.id])}"

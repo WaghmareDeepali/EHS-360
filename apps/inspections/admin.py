@@ -246,7 +246,7 @@ class InspectionScheduleAdmin(admin.ModelAdmin):
     readonly_fields = [
         'schedule_code',
         'started_at',
-        'completed_at',
+        'closed_at',
         'reminder_sent_at',
         'created_at',
         'updated_at'
@@ -284,7 +284,7 @@ class InspectionScheduleAdmin(admin.ModelAdmin):
                 'scheduled_date',
                 'due_date',
                 'started_at',
-                'completed_at'
+                'closed_at'
             )
         }),
         ('Notifications', {
@@ -311,7 +311,7 @@ class InspectionScheduleAdmin(admin.ModelAdmin):
         colors = {
             'SCHEDULED': '#007bff',
             'IN_PROGRESS': '#ffc107',
-            'COMPLETED': '#28a745',
+            'CLOSED': '#28a745',
             'OVERDUE': '#dc3545',
             'CANCELLED': '#6c757d'
         }
@@ -333,23 +333,23 @@ class InspectionScheduleAdmin(admin.ModelAdmin):
         )
     is_overdue.short_description = 'Overdue'
     
-    actions = ['send_reminders', 'mark_as_completed', 'cancel_schedules']
+    actions = ['send_reminders', 'mark_as_closed', 'cancel_schedules']
     
     def send_reminders(self, request, queryset):
         count = queryset.filter(status='SCHEDULED').count()
         self.message_user(request, f'Reminders sent for {count} scheduled inspections.')
     send_reminders.short_description = "Send reminder notifications"
     
-    def mark_as_completed(self, request, queryset):
+    def mark_as_closed(self, request, queryset):
         updated = queryset.filter(status__in=['SCHEDULED', 'IN_PROGRESS']).update(
-            status='COMPLETED',
-            completed_at=timezone.now()
+            status='CLOSED',
+            closed_at=timezone.now()
         )
-        self.message_user(request, f'{updated} inspections marked as completed.')
-    mark_as_completed.short_description = "Mark as completed"
+        self.message_user(request, f'{updated} inspections marked as closed.')
+    mark_as_closed.short_description = "Mark as closed"
     
     def cancel_schedules(self, request, queryset):
-        updated = queryset.exclude(status='COMPLETED').update(status='CANCELLED')
+        updated = queryset.exclude(status='CLOSED').update(status='CANCELLED')
         self.message_user(request, f'{updated} inspections cancelled.')
     cancel_schedules.short_description = "Cancel selected schedules"
 
