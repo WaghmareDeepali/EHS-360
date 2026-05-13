@@ -5,7 +5,7 @@ from django.views.generic import ListView, CreateView, UpdateView, DetailView, T
 from django.urls import reverse, reverse_lazy
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
-from django.db.models import Q
+from django.db.models import Q, Value
 from django.http import JsonResponse
 from django.utils import timezone
 from apps.organizations.models import *
@@ -24,6 +24,7 @@ from apps.common.image_utils import compress_image, compress_video
 
 import json
 from django.db.models import Count
+from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncMonth
 from .forms import HazardForm
 from apps.notifications.services import NotificationService
@@ -1089,10 +1090,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         if selected_category: # <-- NEW
             filtered_hazards = filtered_hazards.filter(hazard_category=selected_category)
         if selected_department: # <-- NEW
-            # NOTE: Yeh filter maanta hai ki aapke Hazard model mein 'department' naam ki ek ForeignKey hai.
-            # Agar aapka structure alag hai (jaise behalf_person_dept), to aapko is line ko adjust karna hoga.
-            # Example: .filter(Q(department_id=selected_department) | Q(behalf_person_dept_id=selected_department))
-            filtered_hazards = filtered_hazards.filter(department_id=selected_department)
+            filtered_hazards = filtered_hazards.filter(reported_by__department_id=selected_department)
             
         if selected_status:
             if selected_status == 'open':
@@ -1212,7 +1210,9 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         from django.core.paginator import Paginator
 
-        hazards_qs = filtered_hazards.select_related('plant', 'location').order_by('-incident_datetime')
+        hazards_qs = filtered_hazards.select_related(
+            'plant', 'location', 'reported_by', 'reported_by__department'
+        ).order_by('-incident_datetime')
 
         paginator = Paginator(hazards_qs, 10)  # 10 per page
         page_number = self.request.GET.get('page')
@@ -1277,20 +1277,51 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['status_keys'] = json.dumps(status_keys)
         context['status_data'] = json.dumps(status_data)
         
-        department_distribution = filtered_hazards.filter(
-            behalf_person_dept__isnull=False  # Filter out hazards with no department
-        ).values(
-            'behalf_person_dept__name'        # Group by the name of the related department
-        ).annotate(
-            count=Count('id')
-        ).order_by('-count')
+        department_distribution = list(
+            filtered_hazards.annotate(
+                reporter_department_name=Coalesce(
+                    'reported_by__department__name',
+                    Value('Unassigned')
+                )
+            ).values(
+                'reported_by__department_id',
+                'reporter_department_name'
+            ).annotate(
+                total=Count('id'),
+                closed_count=Count('id', filter=Q(status__in=['RESOLVED', 'CLOSED'])),
+                overdue_count=Count(
+                    'id',
+                    filter=Q(action_deadline__lt=today) & ~Q(status__in=['RESOLVED', 'CLOSED'])
+                ),
+                critical_count=Count('id', filter=Q(severity='critical'))
+            ).order_by('-total', 'reporter_department_name')
+        )
 
-        department_labels = [item['behalf_person_dept__name'] for item in department_distribution]
-        department_data = [item['count'] for item in department_distribution]
-        
+        for item in department_distribution:
+            item['name'] = item['reporter_department_name']
+            item['open_count'] = item['total'] - item['closed_count']
+
+        department_ids = [item['reported_by__department_id'] for item in department_distribution]
+        department_labels = [item['name'] for item in department_distribution]
+        department_total_data = [item['total'] for item in department_distribution]
+        department_open_data = [item['open_count'] for item in department_distribution]
+        department_overdue_data = [item['overdue_count'] for item in department_distribution]
+
+        top_department = department_distribution[0] if department_distribution else None
+
+        context['department_ids'] = json.dumps(department_ids)
         context['department_labels'] = json.dumps(department_labels)
-        context['department_data'] = json.dumps(department_data)
-        context['department_chart_data'] = department_distribution.exists()
+        context['department_total_data'] = json.dumps(department_total_data)
+        context['department_open_data'] = json.dumps(department_open_data)
+        context['department_overdue_data'] = json.dumps(department_overdue_data)
+        context['department_chart_data'] = bool(department_distribution)
+        context['department_breakdown'] = department_distribution[:6]
+        context['department_summary'] = {
+            'departments_covered': len(department_distribution),
+            'top_department_name': top_department['name'] if top_department else 'N/A',
+            'top_department_total': top_department['total'] if top_department else 0,
+            'top_department_open': top_department['open_count'] if top_department else 0,
+        }
 
         return context
     
@@ -1367,6 +1398,10 @@ class ExportHazardsView(LoginRequiredMixin, View):
         selected_severity = request.GET.get('severity')
         selected_status = request.GET.get('status')
         selected_month = request.GET.get('month')
+        selected_category = request.GET.get('category')
+        selected_department = request.GET.get('department')
+        selected_overdue = request.GET.get('overdue')
+        selected_closed = request.GET.get('closed')
 
         # The plant filter from the URL is ONLY applied if the user is an Admin/Superuser.
         if selected_plant and (user.is_superuser or (hasattr(user, 'role') and user.role.name == 'ADMIN')):
@@ -1381,8 +1416,18 @@ class ExportHazardsView(LoginRequiredMixin, View):
             queryset = queryset.filter(sublocation_id=selected_sublocation)
         if selected_severity:
             queryset = queryset.filter(severity__iexact=selected_severity)
+        if selected_category:
+            queryset = queryset.filter(hazard_category=selected_category)
+        if selected_department:
+            queryset = queryset.filter(reported_by__department_id=selected_department)
         if selected_status == 'open':
             queryset = queryset.exclude(status__in=['RESOLVED', 'CLOSED'])
+        elif selected_status:
+            queryset = queryset.filter(status=selected_status)
+        if selected_overdue == 'true':
+            queryset = queryset.filter(action_deadline__lt=datetime.date.today()).exclude(status__in=['RESOLVED', 'CLOSED'])
+        if selected_closed == 'true':
+            queryset = queryset.filter(status__in=['RESOLVED', 'CLOSED'])
         
         if selected_month:
             try:
@@ -1393,7 +1438,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
         
         # Optimize database queries.
         queryset = queryset.select_related(
-            'plant', 'zone', 'location', 'sublocation', 'reported_by'
+            'plant', 'zone', 'location', 'sublocation', 'reported_by', 'reported_by__department'
         )
 
         # --- Excel generation code starts here ---
@@ -1410,7 +1455,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
         # --- Headers ---
         headers = [
             'Report Number', 'Title', 'Type', 'Category', 'Severity', 'Status',
-            'Incident Datetime', 'Reported By', 'Reported Date', 'Plant', 'Zone',
+            'Incident Datetime', 'Reported By / Department', 'Reported Date', 'Plant', 'Zone',
             'Location', 'Sub-Location', 'Description', 'Action Deadline'
         ]
         sheet.append(headers)
@@ -1431,7 +1476,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
                 hazard.get_severity_display(),
                 hazard.get_status_display(),
                 hazard.incident_datetime.strftime('%Y-%m-%d %H:%M') if hazard.incident_datetime else '',
-                hazard.reported_by.get_full_name() if hazard.reported_by else 'N/A',
+                f"{hazard.reported_by.get_full_name()} ({hazard.reported_by.department.name})" if hazard.reported_by else 'N/A',
                 hazard.created_at.strftime('%Y-%m-%d') if hazard.created_at else '',
                 hazard.plant.name if hazard.plant else 'N/A',
                 hazard.zone.name if hazard.zone else 'N/A',

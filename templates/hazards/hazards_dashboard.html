@@ -35,6 +35,120 @@
         font-size: 1.2rem;
         margin-right: 10px; /* Space between icon and text */
     }
+    .dept-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .dept-summary-card {
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    .dept-summary-card .label {
+        display: block;
+        color: #6c757d;
+        font-size: .8rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        margin-bottom: 6px;
+    }
+    .dept-summary-card .value {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1f2937;
+        line-height: 1.1;
+    }
+    .dept-summary-card .meta {
+        display: block;
+        margin-top: 6px;
+        color: #6c757d;
+        font-size: .85rem;
+    }
+    .metric-pill {
+        display: inline-block;
+        min-width: 34px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        text-align: center;
+        font-size: .8rem;
+        font-weight: 700;
+    }
+    .metric-total { background: #e8f1ff; color: #0d6efd; }
+    .metric-open { background: #fff4db; color: #b7791f; }
+    .metric-overdue { background: #fde8e8; color: #dc3545; }
+    .reported-meta strong {
+        display: block;
+        color: #1f2937;
+    }
+    .reported-meta small {
+        color: #6c757d;
+    }
+    .dept-tracker-panel {
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        overflow: hidden;
+    }
+    .dept-tracker-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid #e5e7eb;
+        background: rgba(255,255,255,.92);
+    }
+    .dept-tracker-panel-header .eyebrow {
+        display: block;
+        font-size: .78rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+    .dept-tracker-panel-header .subcopy {
+        display: block;
+        margin-top: 2px;
+        font-size: .9rem;
+        color: #6c757d;
+    }
+    .dept-tracker-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 18px 18px 8px;
+    }
+    .dept-tracker-scroll::-webkit-scrollbar {
+        height: 10px;
+    }
+    .dept-tracker-scroll::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 999px;
+    }
+    .dept-chart-stage {
+        min-width: 100%;
+        height: 360px;
+    }
+    .dept-chart-stage canvas {
+        height: 100% !important;
+    }
+    .dept-chart-legend-note {
+        padding: 0 18px 16px;
+        font-size: .82rem;
+        color: #6b7280;
+    }
+    @media (max-width: 991.98px) {
+        .dept-summary-grid {
+            grid-template-columns: 1fr;
+        }
+        .dept-tracker-panel-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -90,7 +204,7 @@
                 </select>
             </div>
             <!-- Row 2 -->
-            <!-- <div class="col-md-3 mb-3">
+            <div class="col-md-3 mb-3">
                 <label for="department_filter" class="form-label small font-weight-bold"><i class="fas fa-building mr-1"></i> Department</label>
                 <select name="department" id="department_filter" class="form-control">
                     <option value="">All Departments</option>
@@ -98,7 +212,7 @@
                     <option value="{{ dept.id }}" {% if selected_department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
                     {% endfor %}
                 </select>
-            </div> -->
+            </div>
             <div class="col-md-3 mb-3">
                 <label for="category_filter" class="form-label small font-weight-bold"><i class="fas fa-tags mr-1"></i> Category</label>
                 <select name="category" id="category_filter" class="form-control">
@@ -316,11 +430,42 @@
         <div class="dashboard-card">
             <div class="card-body">
                 <div class="section-header">
-                    <h5><i class="fas fa-building mr-2"></i>Hazards by Department</h5>
+                    <h5><i class="fas fa-building mr-2"></i>Department Hazard Tracker</h5>
                 </div>
                 {% if department_chart_data %}
-                    <div class="chart-container">
-                        <canvas id="departmentChart"></canvas>
+                    <div class="dept-summary-grid">
+                        <div class="dept-summary-card">
+                            <span class="label">Departments Covered</span>
+                            <span class="value">{{ department_summary.departments_covered }}</span>
+                            <span class="meta">Across current filters</span>
+                        </div>
+                        <div class="dept-summary-card">
+                            <span class="label">Highest Reporting Dept</span>
+                            <span class="value">{{ department_summary.top_department_total }}</span>
+                            <span class="meta">{{ department_summary.top_department_name }}</span>
+                        </div>
+                        <div class="dept-summary-card">
+                            <span class="label">Open In Top Dept</span>
+                            <span class="value">{{ department_summary.top_department_open }}</span>
+                            <span class="meta">Still active in {{ department_summary.top_department_name }}</span>
+                        </div>
+                    </div>
+                    <div class="dept-tracker-panel">
+                        <div class="dept-tracker-panel-header">
+                            <div>
+                                <span class="eyebrow">Department Hazard Tracker</span>
+                            </div>
+                            <div class="d-flex align-items-center flex-wrap">
+                                <span class="metric-pill metric-total mr-2 mb-1">Total</span>
+                                <span class="metric-pill metric-open mr-2 mb-1">Open</span>
+                                <span class="metric-pill metric-overdue mb-1">Overdue</span>
+                            </div>
+                        </div>
+                        <div class="dept-tracker-scroll">
+                            <div class="dept-chart-stage">
+                                <canvas id="departmentChart"></canvas>
+                            </div>
+                        </div>
                     </div>
                 {% else %}
                     <div class="col-12 text-center text-muted py-5">
@@ -346,6 +491,7 @@
                             <tr>
                                 <th>Sr No</th>
                                 <th>Report</th>
+                                <th>Reported By / Department</th>
                                 <th>Title</th>
                                 <th>Type</th>
                                 <th>Risk Level</th>
@@ -361,6 +507,10 @@
                                     {{ page_obj.start_index|add:forloop.counter0 }}
                                 </td>
                                 <td><strong>{{ hazard.report_number }}</strong></td>
+                                <td class="reported-meta">
+                                    <strong>{{ hazard.reported_by.get_full_name|default:hazard.reported_by.username }}</strong>
+                                    <small>{{ hazard.reported_by.department.name|default:"Unassigned" }}</small>
+                                </td>
                                 <td>{{ hazard.hazard_title|truncatewords:5 }}</td>
                                 <td>{{ hazard.get_hazard_type_display }}</td>
                                 <td>
@@ -381,7 +531,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No recent hazards found</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-4"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No recent hazards found</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -628,28 +778,47 @@ document.addEventListener('DOMContentLoaded', function() {
     // Department Chart (Hazards by Department) - UPDATED
     const departmentChartCtx = document.getElementById('departmentChart');
     if (departmentChartCtx) {
+        const departmentLabels = {{ department_labels|safe }};
+        const departmentIds = {{ department_ids|safe }};
+        const departmentChartStage = departmentChartCtx.closest('.dept-chart-stage');
+        if (departmentChartStage) {
+            departmentChartStage.style.width = `${Math.max(1100, departmentLabels.length * 120)}px`;
+        }
         new Chart(departmentChartCtx.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: {{ department_labels|safe }},
+                labels: departmentLabels,
                 datasets: [{
-                    label: 'Hazards',
-                    data: {{ department_data|safe }},
-                    backgroundColor: '#6f42c1',
-                    barPercentage: 0.6
+                    label: 'Total',
+                    data: {{ department_total_data|safe }},
+                    backgroundColor: '#0d6efd',
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.62
+                }, {
+                    label: 'Open',
+                    data: {{ department_open_data|safe }},
+                    backgroundColor: '#f59e0b',
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.62
+                }, {
+                    label: 'Overdue',
+                    data: {{ department_overdue_data|safe }},
+                    backgroundColor: '#dc3545',
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.62
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: false },
+                    legend: { position: 'bottom' },
                     // ✅ CHANGED: Data labels configuration for Department chart
                     datalabels: {
                         anchor: 'end',
-                        align: 'bottom',  // <-- CHANGE: Aligns label inside the bar from the top
-                        color: '#fff',      // <-- CHANGE: White color for contrast
-                        offset: 4,          // Optional: Adds a little padding from the top edge
+                        align: 'top',
+                        color: '#374151',
+                        offset: 2,
                         font: {
                             weight: 'bold'
                         },
@@ -657,15 +826,43 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 },
                 scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#4b5563',
+                            maxRotation: 35,
+                            minRotation: 35,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
                     y: {
                         beginAtZero: true,
+                        grid: {
+                            color: '#e5e7eb'
+                        },
                         ticks: {
-                            precision: 0
+                            precision: 0,
+                            color: '#6b7280'
                         }
+                    }
+                },
+                onClick: (e, elements) => {
+                    if (elements.length > 0) {
+                        const clickedDepartmentId = departmentIds[elements[0].index];
+                        if (!clickedDepartmentId) {
+                            return;
+                        }
+                        const currentParams = new URLSearchParams(window.location.search);
+                        currentParams.set('department', clickedDepartmentId);
+                        window.location.href = window.location.pathname + '?' + currentParams.toString();
                     }
                 }
             },
-            plugins: [ChartDataLabels] // Registering the plugin
+            plugins: [ChartDataLabels]
         });
     }
 
