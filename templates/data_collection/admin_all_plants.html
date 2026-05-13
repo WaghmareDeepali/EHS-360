@@ -26,6 +26,69 @@
     color: white;
 }
 
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    margin-top: 16px;
+}
+
+.filter-box label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.filter-box select,
+.filter-box button {
+    min-width: 180px;
+}
+
+.checkbox-dropdown {
+    position: relative;
+    min-width: 260px;
+}
+
+.checkbox-toggle {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: none;
+    font-weight: 600;
+    text-align: left;
+    color: #1e293b;
+    background: #fff;
+}
+
+.checkbox-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    background: #fff;
+    color: #1e293b;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    z-index: 20;
+}
+
+.checkbox-menu.show {
+    display: block;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-weight: 500;
+}
+
 .plant-section {
     background: white;
     border-radius: 0.75rem;
@@ -43,25 +106,6 @@
     border-bottom: 3px solid #dc2626;
 }
 
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-    padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.data-table thead {
-    background: #f8fafc;
-}
-
-.data-table tbody tr:hover {
-    background: #f1f5f9;
-}
 .table-wrapper {
     width: 100%;
     overflow-x: auto;
@@ -69,7 +113,7 @@
 }
 
 .data-table {
-    min-width: 1200px; /* prevents squishing */
+    min-width: 1200px;
     width: 100%;
     border-collapse: collapse;
     background: white;
@@ -104,84 +148,88 @@
     background: #f1f5f9;
 }
 
-.data-table tbody tr:hover {
-    background: #f8fafc;
-}
-
 .btn-export {
-    margin-top: 17px;
-    background: dodgerblue; 
+    background: dodgerblue;
     color: #ffffff;
 }
 
 .btn-export:hover {
-    background: #145a32;
     color: #ffffff;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(29, 111, 66, 0.3);
 }
 
-.btn-export i {
-    font-size: 15px;
-}
-
-.btn-export:disabled {
-    background: #95a5a6;
-    cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
-}
-
-.btn-export i{
-    margin-right: 8px;
-}
 .attachment-link {
     margin-left: 8px;
     color: #64748b;
     text-decoration: none;
-    transition: color 0.2s;
-}
-.attachment-link:hover {
-    color: #2563eb;
 }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="admin-container">
+    <div class="header-section">
+        <h2>All Plants Monthly Data</h2>
+        <p>
+            Total Plants: {{ total_plants }} |
+            Selected Plants: {{ selected_plants_count }} |
+            Total Questions: {{ total_questions }}
+        </p>
 
-    <!-- RED HEADER WITH DROPDOWN -->
-    <div class="header-section"
-         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <form method="get" id="filtersForm">
+            <div class="filter-row">
+                <div class="filter-box">
+                    <label>Select Plant</label>
+                    <div class="checkbox-dropdown">
+                        <button type="button" class="checkbox-toggle" id="plantToggle">All plants</button>
+                        <div class="checkbox-menu" id="plantMenu">
+                            {% for plant in all_plants %}
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="plant_ids" value="{{ plant.id }}" {% if plant.id|stringformat:"s" in selected_plant_ids %}checked{% endif %}>
+                                <span>{{ plant.name }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
 
-        <div>
-            <h2>All Plants Monthly Data</h2>
-            <p>
-                Total Plants: {{ total_plants }} |
-                Plants with Data: {{ plants_with_data }} |
-                Total Questions: {{ total_questions }}
-            </p>
-        <button type="button" class="btn btn-export" id="exportBtn"><i class="fas fa-file-excel"></i> Export to Excel</button>
-        </div>
+                <div class="filter-box">
+                    <label>Month</label>
+                    <select name="month" class="form-control">
+                        <option value="all" {% if selected_month == 'all' %}selected{% endif %}>All Months</option>
+                        {% for month in months %}
+                        <option value="{{ month.code }}" {% if selected_month == month.code %}selected{% endif %}>{{ month.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-        <div>
-            <label style="font-weight:600; margin-right:8px;">Select Plant</label>
-            <select id="plantFilter"
-                    style="padding:10px 14px; border-radius:6px; border:none; font-weight:600; min-width:220px;">
-                <option value="all">All plants</option>
-                {% for plant_data in plants_data %}
-                    <option value="plant-{{ plant_data.plant.id }}">
-                        {{ plant_data.plant.name }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
+                <div class="filter-box">
+                    <label>Financial Year</label>
+                    <select name="financial_year" class="form-control">
+                        {% for fy in financial_year_options %}
+                        <option value="{{ fy }}" {% if selected_financial_year == fy %}selected{% endif %}>{{ fy }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-box">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-light">Apply Filter</button>
+                </div>
+                <div class="filter-box">
+                    <label>&nbsp;</label>
+                    <a href="{% url 'environmental:admin-all-plants' %}" class="btn btn-light">Reset</a>
+                </div>
+
+                <div class="filter-box">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-export" id="exportBtn"><i class="fas fa-file-excel"></i> Export to Excel</button>
+                </div>
+            </div>
+        </form>
     </div>
 
-    <!-- PLANT DATA SECTIONS -->
-    {% for plant_data in plants_data %}
-    <div class="plant-section" id="plant-{{ plant_data.plant.id }}">
-        <h3 class="plant-title">{{ plant_data.plant.name }}</h3>
+    <div class="plant-section">
+        <h3 class="plant-title">{{ display_title }}</h3>
 
         <div class="table-wrapper">
             <table class="data-table">
@@ -189,19 +237,17 @@
                     <tr>
                         <th>Environmental Indicator</th>
                         {% for month in months %}
-                            <th>{{ month }}</th>
+                            <th>{{ month.label }}</th>
                         {% endfor %}
                         <th>Annual</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for q in plant_data.questions_data %}
+                    {% for q in questions_data %}
                     <tr>
                         <td><strong>{{ q.question }}</strong> ({{ q.unit }})</td>
-                        
-                        {# ✅ MODIFIED LOOP #}
                         {% for month in months %}
-                            {% with cell_data=q.month_data|get_item:month %}
+                            {% with cell_data=q.month_data|get_item:month.label %}
                             <td>
                                 {{ cell_data.value|default:"-" }}
                                 {% if cell_data.attachment %}
@@ -215,47 +261,57 @@
                             </td>
                             {% endwith %}
                         {% endfor %}
-
                         <td><strong>{{ q.annual }}</strong></td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ months|length|add:2 }}">No data found</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
-    {% endfor %}
-
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const plantFilter = document.getElementById('plantFilter');
-    const sections = document.querySelectorAll('.plant-section');
+    const plantToggle = document.getElementById('plantToggle');
+    const plantMenu = document.getElementById('plantMenu');
+    const checkboxes = Array.from(document.querySelectorAll('input[name="plant_ids"]'));
     const exportBtn = document.getElementById('exportBtn');
-    plantFilter.addEventListener('change', function () {
-        const selected = this.value;
 
-        sections.forEach(section => {
-            section.style.display =
-                (selected === 'all' || section.id === selected)
-                ? 'block'
-                : 'none';
-        });
+    function updatePlantLabel() {
+        const selected = checkboxes.filter(cb => cb.checked);
+        if (selected.length === 0 || selected.length === checkboxes.length) {
+            plantToggle.textContent = 'All plants';
+        } else if (selected.length === 1) {
+            plantToggle.textContent = selected[0].parentElement.querySelector('span').textContent;
+        } else {
+            plantToggle.textContent = selected.length + ' plants selected';
+        }
+    }
+
+    plantToggle.addEventListener('click', function () {
+        plantMenu.classList.toggle('show');
     });
-    exportBtn.addEventListener("click", function () {
-        if (exportBtn.dataset.clicked === "true") return;
 
-        exportBtn.dataset.clicked = "true";
-        exportBtn.disabled = true;
-        exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
-        window.location.href = "{% url 'environmental:export_excel' %}?plant_id={{ plant.id }}";
-
-        setTimeout(() => {
-            exportBtn.disabled = false;
-            exportBtn.dataset.clicked = "false";
-            exportBtn.innerHTML = '<i class="fas fa-file-excel"></i> Export to Excel';
-        }, 3000);
+    document.addEventListener('click', function (event) {
+        if (!plantMenu.contains(event.target) && !plantToggle.contains(event.target)) {
+            plantMenu.classList.remove('show');
+        }
     });
+
+    checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', updatePlantLabel);
+    });
+
+    exportBtn.addEventListener('click', function () {
+        const params = new URLSearchParams(new FormData(document.getElementById('filtersForm')));
+        window.location.href = "{% url 'environmental:export_excel' %}?" + params.toString();
+    });
+
+    updatePlantLabel();
 });
 </script>
 {% endblock %}

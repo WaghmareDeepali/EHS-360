@@ -1,376 +1,324 @@
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
-from django.db.models import Count, Q, Sum
-from datetime import datetime, date
-import calendar
-import json
-from apps.ENVdata.constants import MONTHS
-from apps.accounts.models import Plant
-from .models import *
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
-from django.http import HttpResponse
 
-
+from .models import EnvironmentalQuestion, MonthlyIndicatorAttachment, MonthlyIndicatorData
 
 
 class EnvironmentalDataFetcher:
     """
-    Dynamic data fetcher for auto-calculated environmental questions
+    Dynamic data fetcher for auto-calculated environmental questions.
     """
-    
+
     @classmethod
     def get_data_for_plant_year(cls, plant, year):
-        """
-        Returns auto-calculated values for all questions dynamically
-        Format: {'Question Text': {'January': 5, 'February': 3, ...}}
-        """
-        from .models import EnvironmentalQuestion
-        
         result = {}
-        
-        # ✅ UPDATED: Include INSPECTION source type
         auto_questions = EnvironmentalQuestion.objects.filter(
             is_active=True,
-            source_type__in=['INCIDENT', 'HAZARD', 'INSPECTION']  # ⬅️ ADDED INSPECTION
+            source_type__in=["INCIDENT", "HAZARD", "INSPECTION"],
         )
-        
-        MONTHS = [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
+
+        months = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
         ]
-        
+
         for question in auto_questions:
             month_data = {}
-            
-            for month_num, month_name in enumerate(MONTHS, start=1):
-                count = cls.calculate_question_value(
-                    question, plant, month_num, year
+            for month_num, month_name in enumerate(months, start=1):
+                month_data[month_name] = cls.calculate_question_value(
+                    question,
+                    plant,
+                    month_num,
+                    year,
                 )
-                month_data[month_name] = count
-            
             result[question.question_text] = month_data
-        
+
         return result
-    
+
     @classmethod
     def calculate_question_value(cls, question, plant, month, year):
-        """Calculate value for a specific question, plant, and month"""
-        
-        if question.source_type == 'INCIDENT':
+        if question.source_type == "INCIDENT":
             from apps.accidents.models import Incident
 
             queryset = Incident.objects.filter(
                 plant=plant,
                 incident_date__month=month,
-                incident_date__year=year
+                incident_date__year=year,
             )
-            
-            # ✅ Apply primary filter - incident_type is ForeignKey (use _id)
-            if question.filter_field == 'incident_type' and question.filter_value:
+
+            if question.filter_field == "incident_type" and question.filter_value:
                 queryset = queryset.filter(incident_type_id=question.filter_value)
-            elif question.filter_field == 'status' and question.filter_value:
+            elif question.filter_field == "status" and question.filter_value:
                 queryset = queryset.filter(status=question.filter_value)
-            elif question.filter_field == 'plant' and question.filter_value:
+            elif question.filter_field == "plant" and question.filter_value:
                 queryset = queryset.filter(plant_id=question.filter_value)
-            
-            # ✅ Apply secondary filter
+
             if question.filter_field_2 and question.filter_value_2:
-                if question.filter_field_2 == 'incident_type':
+                if question.filter_field_2 == "incident_type":
                     queryset = queryset.filter(incident_type_id=question.filter_value_2)
-                elif question.filter_field_2 == 'status':
+                elif question.filter_field_2 == "status":
                     queryset = queryset.filter(status=question.filter_value_2)
-                elif question.filter_field_2 == 'plant':
+                elif question.filter_field_2 == "plant":
                     queryset = queryset.filter(plant_id=question.filter_value_2)
-            
+
             return queryset.count()
-        
-        elif question.source_type == 'HAZARD':
-            try:
-                from apps.hazards.models import Hazard
-                
-                # ✅ Use incident_datetime (DateTimeField)
-                queryset = Hazard.objects.filter(
-                    plant=plant,
-                    incident_datetime__year=year,
-                    incident_datetime__month=month
-                )
-                
-                # ✅ Apply primary filter - hazard_type is CharField (NO _id)
-                if question.filter_field == 'hazard_type' and question.filter_value:
-                    queryset = queryset.filter(hazard_type=question.filter_value)
-                elif question.filter_field == 'severity' and question.filter_value:
-                    queryset = queryset.filter(severity=question.filter_value)
-                elif question.filter_field == 'status' and question.filter_value:
+
+        if question.source_type == "HAZARD":
+            from apps.hazards.models import Hazard
+
+            queryset = Hazard.objects.filter(
+                plant=plant,
+                incident_datetime__year=year,
+                incident_datetime__month=month,
+            )
+
+            if question.filter_field == "hazard_type" and question.filter_value:
+                queryset = queryset.filter(hazard_type=question.filter_value)
+            elif question.filter_field == "severity" and question.filter_value:
+                queryset = queryset.filter(severity=question.filter_value)
+            elif question.filter_field == "status" and question.filter_value:
+                queryset = queryset.filter(status=question.filter_value)
+            elif question.filter_field == "plant" and question.filter_value:
+                queryset = queryset.filter(plant_id=question.filter_value)
+
+            if question.filter_field_2 and question.filter_value_2:
+                if question.filter_field_2 == "hazard_type":
+                    queryset = queryset.filter(hazard_type=question.filter_value_2)
+                elif question.filter_field_2 == "severity":
+                    queryset = queryset.filter(severity=question.filter_value_2)
+                elif question.filter_field_2 == "status":
+                    queryset = queryset.filter(status=question.filter_value_2)
+                elif question.filter_field_2 == "plant":
+                    queryset = queryset.filter(plant_id=question.filter_value_2)
+
+            return queryset.count()
+
+        if question.source_type == "INSPECTION":
+            from apps.inspections.models import InspectionSchedule
+
+            queryset = InspectionSchedule.objects.filter(
+                plants=plant,
+                scheduled_date__month=month,
+                scheduled_date__year=year,
+            )
+
+            if question.filter_field and question.filter_value:
+                if question.filter_field == "template":
+                    queryset = queryset.filter(template_id=question.filter_value)
+                elif question.filter_field == "inspection_type":
+                    queryset = queryset.filter(template__inspection_type=question.filter_value)
+                elif question.filter_field == "status":
                     queryset = queryset.filter(status=question.filter_value)
-                elif question.filter_field == 'plant' and question.filter_value:
-                    queryset = queryset.filter(plant_id=question.filter_value)
-                
-                # ✅ Apply secondary filter
-                if question.filter_field_2 and question.filter_value_2:
-                    if question.filter_field_2 == 'hazard_type':
-                        queryset = queryset.filter(hazard_type=question.filter_value_2)
-                    elif question.filter_field_2 == 'severity':
-                        queryset = queryset.filter(severity=question.filter_value_2)
-                    elif question.filter_field_2 == 'status':
-                        queryset = queryset.filter(status=question.filter_value_2)
-                    elif question.filter_field_2 == 'plant':
-                        queryset = queryset.filter(plant_id=question.filter_value_2)
-                
-                return queryset.count()
-            
-            except ImportError:
-                return 0
-            except Exception as e:
-                print(f"Error calculating hazard data: {e}")
-                import traceback
-                traceback.print_exc()
-                return 0
-        
-        # ========================================
-        # ⬇️ NEW SECTION: INSPECTION CALCULATION
-        # ========================================
-        elif question.source_type == 'INSPECTION':
-            try:
-                from apps.inspections.models import InspectionSchedule, InspectionTemplate
-                
-                # Base queryset - filter by plant, month, year
-                queryset = InspectionSchedule.objects.filter(
-                    plant=plant,
-                    scheduled_date__month=month,
-                    scheduled_date__year=year
-                )
-                
-                # ✅ Apply primary filter
-                if question.filter_field and question.filter_value:
-                    if question.filter_field == 'template':
-                        # Template is ForeignKey, use _id
-                        queryset = queryset.filter(template_id=question.filter_value)
-                    
-                    elif question.filter_field == 'inspection_type':
-                        # Filter by template's inspection_type
-                        queryset = queryset.filter(template__inspection_type=question.filter_value)
-                    
-                    elif question.filter_field == 'status':
-                        # Status is CharField on InspectionSchedule
-                        queryset = queryset.filter(status=question.filter_value)
-                    
-                    elif question.filter_field == 'plant':
-                        # Plant is ForeignKey, use _id
-                        queryset = queryset.filter(plant_id=question.filter_value)
-                    
-                    elif question.filter_field == 'assigned_to':
-                        # Assigned to is ForeignKey (User), use _id
-                        queryset = queryset.filter(assigned_to_id=question.filter_value)
-                
-                # ✅ Apply secondary filter (optional)
-                if question.filter_field_2 and question.filter_value_2:
-                    if question.filter_field_2 == 'template':
-                        queryset = queryset.filter(template_id=question.filter_value_2)
-                    
-                    elif question.filter_field_2 == 'inspection_type':
-                        queryset = queryset.filter(template__inspection_type=question.filter_value_2)
-                    
-                    elif question.filter_field_2 == 'status':
-                        queryset = queryset.filter(status=question.filter_value_2)
-                    
-                    elif question.filter_field_2 == 'plant':
-                        queryset = queryset.filter(plant_id=question.filter_value_2)
-                    
-                    elif question.filter_field_2 == 'assigned_to':
-                        queryset = queryset.filter(assigned_to_id=question.filter_value_2)
-                
-                return queryset.count()
-            
-            except ImportError:
-                # Inspection module not installed
-                print("Inspection module not found")
-                return 0
-            except Exception as e:
-                print(f"Error calculating inspection data: {e}")
-                import traceback
-                traceback.print_exc()
-                return 0
-        
-        # Default return for unknown source types
+                elif question.filter_field == "plant":
+                    queryset = queryset.filter(plants__id=question.filter_value)
+                elif question.filter_field == "assigned_to":
+                    queryset = queryset.filter(assigned_to_id=question.filter_value)
+
+            if question.filter_field_2 and question.filter_value_2:
+                if question.filter_field_2 == "template":
+                    queryset = queryset.filter(template_id=question.filter_value_2)
+                elif question.filter_field_2 == "inspection_type":
+                    queryset = queryset.filter(template__inspection_type=question.filter_value_2)
+                elif question.filter_field_2 == "status":
+                    queryset = queryset.filter(status=question.filter_value_2)
+                elif question.filter_field_2 == "plant":
+                    queryset = queryset.filter(plants__id=question.filter_value_2)
+                elif question.filter_field_2 == "assigned_to":
+                    queryset = queryset.filter(assigned_to_id=question.filter_value_2)
+
+            return queryset.distinct().count()
+
         return 0
-    
-def get_all_plants_environmental_data(plants):
-    questions = EnvironmentalQuestion.objects.filter(is_active=True).order_by("order")
 
-    all_data = (
-        MonthlyIndicatorData.objects
-        .filter(plant__in=plants)
-        .select_related("plant", "indicator", "unit")
-    )
 
-    current_year = datetime.now().year
-    plants_data = []
+def get_financial_year_start_year(selected_fy=None):
+    if selected_fy:
+        try:
+            return int(str(selected_fy).split("-")[0])
+        except (TypeError, ValueError, AttributeError):
+            pass
 
     today = datetime.now()
-    current_year = today.year
+    return today.year - 1 if today.month < 4 else today.year
 
-    if today.month < 4:
-        fy_start_year = current_year - 1
-    else:
-        fy_start_year = current_year
 
-    FY_MONTH_ORDER = [
-        ("APR", "April"), ("MAY", "May"), ("JUN", "June"),
-        ("JUL", "July"), ("AUG", "August"), ("SEP", "September"),
-        ("OCT", "October"), ("NOV", "November"), ("DEC", "December"),
-        ("JAN", "January"), ("FEB", "February"), ("MAR", "March"),
+def get_financial_year_label(fy_start_year):
+    return f"{fy_start_year}-{fy_start_year + 1}"
+
+
+def get_financial_year_options(count=5, base_start_year=None):
+    if base_start_year is None:
+        base_start_year = get_financial_year_start_year()
+    return [get_financial_year_label(base_start_year - offset) for offset in range(count)]
+
+
+def get_financial_year_months(fy_start_year=None):
+    fy_start_year = get_financial_year_start_year(fy_start_year)
+    month_labels = dict(MonthlyIndicatorData.MONTH_CHOICES)
+    month_codes = [
+        "APR", "MAY", "JUN", "JUL", "AUG", "SEP",
+        "OCT", "NOV", "DEC", "JAN", "FEB", "MAR",
     ]
 
-    for plant in plants:
-        questions_data = []
-
-        for q in questions:
-            month_data = {}
-            total = 0
-            has_values = False
-            unit_name = q.default_unit.name if q.default_unit else "Count"
-
-            # for month_db, month_label in MonthlyIndicatorData.MONTH_CHOICES:
-            #     if q.source_type in ['INCIDENT', 'HAZARD', 'INSPECTION']:
-            #         month_number = list(calendar.month_name).index(month_label)
-
-            #         value = EnvironmentalDataFetcher.calculate_question_value(q, plant, month_number, current_year)
-            #         month_data[month_label] = value
-
-            #         if value:
-            #             total += value
-            #             has_values = True
-            #     else:
-            #         entry = all_data.filter(plant=plant,indicator=q,month=month_db).first()
-
-            #         if entry and entry.value is not None:
-            #             value = entry.value
-            #             month_data[month_label] = value
-
-            #             try:
-            #                 total += float(str(value).replace(",", ""))
-            #                 has_values = True
-            #             except (ValueError, TypeError):
-            #                 pass
-            #         else:
-            #             month_data[month_label] = ""
-
-
-            for month_db, month_label in FY_MONTH_ORDER:
-
-                if q.source_type in ['INCIDENT', 'HAZARD', 'INSPECTION']:
-
-                    month_number = list(calendar.month_name).index(month_label)
-
-                    if month_db in ["JAN", "FEB", "MAR"]:
-                        year = fy_start_year + 1
-                    else:
-                        year = fy_start_year
-
-                    value = EnvironmentalDataFetcher.calculate_question_value(
-                        q, plant, month_number, year
-                    )
-
-                    month_data[month_label] = value
-
-                    if value not in [None, "", "-"]:
-                        try:
-                            total += float(value)
-                            has_values = True
-                        except:
-                            pass
-                else:
-                    entry = all_data.filter(
-                        plant=plant,
-                        indicator=q,
-                        month=month_db
-                    ).first()
-
-                    if entry and entry.value is not None:
-                        value = entry.value
-                        month_data[month_label] = value
-
-                        try:
-                            total += float(str(value).replace(",", ""))
-                            has_values = True
-                        except (ValueError, TypeError):
-                            pass
-                    else:
-                        month_data[month_label] = ""
-
-            questions_data.append({
-                "question": q.question_text,
-                "unit": unit_name,
-                "month_data": month_data,
-                "annual": f"{total:,.2f}" if has_values else "",
-            })
-
-        plants_data.append({
-            "plant": plant,
-            "questions_data": questions_data,
+    months = []
+    for month_code in month_codes:
+        month_name = month_labels.get(month_code, month_code.title())
+        year = fy_start_year + 1 if month_code in ["JAN", "FEB", "MAR"] else fy_start_year
+        months.append({
+            "code": month_code,
+            "label": f"{month_name} {year}",
+            "month_name": month_name,
+            "month_number": datetime.strptime(month_code, "%b").month,
+            "year": year,
         })
-        print("DEBUG:", q.question_text, month_label, value)
-    return plants_data
+    return months
 
 
-def generate_environmental_excel(plants_data):
-    MONTH_LABELS = [
-        "April", "May", "June", "July", "August", "September", 
-        "October", "November", "December","January", "February", "March" 
-    ]
-    # MONTH_LABELS = [
-    #     "January", "February", "March", "April", "May", "June",
-    #     "July", "August", "September", "October", "November", "December"
-    # ]
+def parse_decimal(value):
+    if value in [None, "", "-"]:
+        return None
+    try:
+        return Decimal(str(value).replace(",", "").strip())
+    except (InvalidOperation, AttributeError):
+        return None
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Environmental Data"
 
-    all_questions = []
-    question_meta = {}
+def format_decimal(value):
+    if value in [None, ""]:
+        return "-"
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    normalized = value.normalize()
+    return format(normalized, "f").rstrip("0").rstrip(".") or "0"
 
-    for plant_data in plants_data:
-        for q in plant_data["questions_data"]:
-            if q["question"] not in all_questions:
-                all_questions.append(q["question"])
-                question_meta[q["question"]] = {
-                    "unit": q.get("unit", ""),
-                }
 
-    ws.cell(row=1, column=1, value="Indicators")
-    # header row plant code
-    col = 2
-    for plant_data in plants_data:
-        plant = plant_data["plant"]
+def get_environmental_questions():
+    return list(
+        EnvironmentalQuestion.objects.filter(is_active=True)
+        .select_related("unit_category", "default_unit")
+        .order_by("is_system", "order", "id")
+    )
 
-        ws.merge_cells(
-            start_row=1,
-            start_column=col,
-            end_row=1,
-            end_column=col + len(MONTH_LABELS)
+
+def build_environmental_report(plants, fy_start_year=None, selected_month=None, aggregate=False, include_attachments=True):
+    plants = list(plants)
+    questions = get_environmental_questions()
+    months = get_financial_year_months(fy_start_year)
+
+    if selected_month and selected_month != "all":
+        months = [month for month in months if month["code"] == selected_month]
+
+    manual_entries = MonthlyIndicatorData.objects.filter(
+        plant__in=plants,
+        indicator__in=questions,
+    ).select_related("plant", "indicator", "unit")
+
+    manual_dict = {}
+    for entry in manual_entries:
+        manual_dict.setdefault(entry.plant_id, {}).setdefault(entry.indicator_id, {})[entry.month] = entry.value
+
+    attachments_dict = {}
+    if include_attachments:
+        attachments = MonthlyIndicatorAttachment.objects.filter(
+            plant__in=plants,
+            indicator__in=questions,
+        ).select_related("plant", "indicator")
+        for attachment in attachments:
+            attachments_dict.setdefault(attachment.plant_id, {}).setdefault(attachment.indicator_id, {})[
+                attachment.month
+            ] = attachment
+
+    def get_question_value(question, plant, month):
+        if question.source_type == "MANUAL":
+            return manual_dict.get(plant.id, {}).get(question.id, {}).get(month["code"])
+        return EnvironmentalDataFetcher.calculate_question_value(
+            question,
+            plant,
+            month["month_number"],
+            month["year"],
         )
 
-        ws.cell(row=1, column=col, value=plant.code)
-        col += len(MONTH_LABELS) + 1  
+    if aggregate:
+        questions_data = []
+        for question in questions:
+            month_data = {}
+            annual_total = Decimal("0")
+            has_values = False
 
-    ws.cell(row=2, column=1, value="")
-    # header row months + total
-    col = 2
-    for _ in plants_data:
-        for month in MONTH_LABELS:
-            ws.cell(row=2, column=col, value=month)
-            col += 1
+            for month in months:
+                month_total = Decimal("0")
+                month_has_values = False
 
-        ws.cell(row=2, column=col, value="Total")
-        col += 1
+                for plant in plants:
+                    numeric_value = parse_decimal(get_question_value(question, plant, month))
+                    if numeric_value is not None:
+                        month_total += numeric_value
+                        month_has_values = True
 
-    # styling for the excel
+                month_data[month["label"]] = {
+                    "value": format_decimal(month_total) if month_has_values else "-",
+                    "attachment": None,
+                }
+
+                if month_has_values:
+                    annual_total += month_total
+                    has_values = True
+
+            questions_data.append({
+                "question": question.question_text,
+                "unit": question.default_unit.name if question.default_unit else "Count",
+                "month_data": month_data,
+                "annual": format_decimal(annual_total) if has_values else "-",
+            })
+
+        return {"months": months, "questions_data": questions_data}
+
+    plants_data = []
+    for plant in plants:
+        question_rows = []
+        for question in questions:
+            month_data = {}
+            annual_total = Decimal("0")
+            has_values = False
+
+            for month in months:
+                raw_value = get_question_value(question, plant, month)
+                numeric_value = parse_decimal(raw_value)
+                month_data[month["label"]] = {
+                    "value": raw_value if raw_value not in [None, ""] else "-",
+                    "attachment": attachments_dict.get(plant.id, {}).get(question.id, {}).get(month["code"])
+                    if include_attachments else None,
+                }
+
+                if numeric_value is not None:
+                    annual_total += numeric_value
+                    has_values = True
+
+            question_rows.append({
+                "question": question.question_text,
+                "unit": question.default_unit.name if question.default_unit else "Count",
+                "month_data": month_data,
+                "annual": format_decimal(annual_total) if has_values else "-",
+            })
+
+        plants_data.append({"plant": plant, "questions_data": question_rows})
+
+    return {"months": months, "plants_data": plants_data}
+def generate_environmental_excel(report_data, title="Environmental Data"):
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Environmental Data"
+
+    month_labels = [month["label"] for month in report_data["months"]]
+    headers = ["Indicators"] + month_labels + ["Total"]
+
     header_font = Font(bold=True)
     center_align = Alignment(horizontal="center", vertical="center")
     right_align = Alignment(horizontal="right", vertical="center")
-
     thin_border = Border(
         left=Side(style="thin"),
         right=Side(style="thin"),
@@ -378,66 +326,47 @@ def generate_environmental_excel(plants_data):
         bottom=Side(style="thin"),
     )
 
-    for row in ws.iter_rows(min_row=1, max_row=2):
-        for cell in row:
-            cell.font = header_font
-            cell.alignment = center_align
+    worksheet.cell(row=1, column=1, value=title)
+    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+
+    for column_index, header in enumerate(headers, start=1):
+        cell = worksheet.cell(row=2, column=column_index, value=header)
+        cell.font = header_font
+        cell.alignment = center_align
+        cell.border = thin_border
+
+    for row_index, row in enumerate(report_data["questions_data"], start=3):
+        label_cell = worksheet.cell(row=row_index, column=1, value=f"{row['question']} ({row['unit']})")
+        label_cell.border = thin_border
+
+        for month_index, month_label in enumerate(month_labels, start=2):
+            value = row["month_data"].get(month_label, {}).get("value", "-")
+            numeric_value = parse_decimal(value)
+            cell = worksheet.cell(
+                row=row_index,
+                column=month_index,
+                value=float(numeric_value) if numeric_value is not None else value,
+            )
+            cell.alignment = right_align if numeric_value is not None else center_align
             cell.border = thin_border
 
-    # data rows
-    ws.freeze_panes = "B3"
-    current_row = 3
+        total_value = row.get("annual", "-")
+        numeric_total = parse_decimal(total_value)
+        total_cell = worksheet.cell(
+            row=row_index,
+            column=len(headers),
+            value=float(numeric_total) if numeric_total is not None else total_value,
+        )
+        total_cell.alignment = right_align if numeric_total is not None else center_align
+        total_cell.border = thin_border
 
-    for question in all_questions:
-        ws.cell(row=current_row, column=1, value=question)
-        col = 2
-
-        for plant_data in plants_data:
-            plant_question_map = {q["question"]: q for q in plant_data["questions_data"]}
-            q = plant_question_map.get(question)
-            total = 0
-
-            for month in MONTH_LABELS:
-                # value = 0
-                # if q:
-                #     value = q["month_data"].get(month, 0)
-
-                # ws.cell(row=current_row, column=col, value=value)
-                # ws.cell(row=current_row, column=col).alignment = right_align
-
-                # if isinstance(value, (int, float)):
-                #     total += value
-                value = 0
-                if q:
-                    value = q["month_data"].get(month, 0)
-
-                # ✅ Convert to number
-                try:
-                    numeric_value = float(value)
-                except (ValueError, TypeError):
-                    numeric_value = 0
-
-                ws.cell(row=current_row, column=col, value=numeric_value)
-                ws.cell(row=current_row, column=col).alignment = right_align
-
-                total += numeric_value
-
-                col += 1
-
-            ws.cell(row=current_row, column=col, value=total)
-            ws.cell(row=current_row, column=col).alignment = right_align
-
-            col += 1
-        current_row += 1
-
-    for column_cells in ws.columns:
+    for column_cells in worksheet.columns:
         max_length = 0
-        col_letter = get_column_letter(column_cells[0].column)
-
+        column_letter = get_column_letter(column_cells[0].column)
         for cell in column_cells:
-            cell.border = thin_border
-            if cell.value:
+            if cell.value is not None:
                 max_length = max(max_length, len(str(cell.value)))
-        ws.column_dimensions[col_letter].width = max_length + 3
+        worksheet.column_dimensions[column_letter].width = max_length + 3
 
-    return wb
+    worksheet.freeze_panes = "B3"
+    return workbook
