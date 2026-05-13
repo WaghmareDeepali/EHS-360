@@ -20,6 +20,7 @@ urlpatterns = [
     path('incidents/<int:pk>/', views.IncidentDetailView.as_view(), name='incident_detail'),
     path('incidents/<int:pk>/edit/', views.IncidentUpdateView.as_view(), name='incident_update'),
     path('incidents/<int:pk>/pdf/', views.IncidentPDFDownloadView.as_view(), name='incident_pdf'),
+    path('incidents/<int:pk>/delete/', views.IncidentDeleteView.as_view(), name='incident_delete'),
 
     # Investigation Report
     path('incidents/<int:incident_pk>/investigation/', views.InvestigationReportCreateView.as_view(), name='investigation_create'),

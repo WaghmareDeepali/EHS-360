@@ -34,6 +34,7 @@ from django.views.generic import UpdateView
 from django.views.generic import ListView
 from .models import IncidentActionItem
 from django.db.models import Exists, OuterRef
+from django.views import View
 
 
 
@@ -442,6 +443,16 @@ class IncidentDetailView(LoginRequiredMixin, DetailView):
         
         return context
 
+class IncidentDeleteView(LoginRequiredMixin, View):
+
+    def post(self, request, pk):
+        incident = get_object_or_404(Incident, pk=pk)
+
+        incident.delete()
+
+        messages.success(request, "Incident deleted successfully.")
+
+        return redirect('accidents:incident_list')
 
 # ============================================================================
 # REPLACE YOUR EXISTING IncidentUpdateView WITH THIS UPDATED VERSION
