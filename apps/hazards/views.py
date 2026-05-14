@@ -154,14 +154,32 @@ class HazardListView(LoginRequiredMixin, ListView):
 
 
         from apps.hazards.models import HazardActionItem
+        selected_assigned_by = self.request.GET.get('assigned_by', '')
+        selected_assigned_to = self.request.GET.get('assigned_to', '')
+        action_items_queryset = HazardActionItem.objects.exclude(responsible_emails='')
+
+        if selected_assigned_by:
+            action_items_queryset = action_items_queryset.filter(
+                hazard__reported_by_id=selected_assigned_by
+            )
+
         assigned_emails = []
-        for action in HazardActionItem.objects.exclude(responsible_emails=''):
+
+        for action in action_items_queryset:
             emails = [
                 email.strip()
                 for email in action.responsible_emails.split(',')
                 if email.strip()
             ]
             assigned_emails.extend(emails)
+        if selected_assigned_to:
+            valid_user_exists = context['assigned_to_users'].filter(
+                id=selected_assigned_to
+            ).exists()
+
+            if not valid_user_exists:
+                selected_assigned_to = ''
+
         context['assigned_to_users'] = User.objects.filter(
             email__in=assigned_emails,
             is_active=True,
@@ -182,7 +200,7 @@ class HazardListView(LoginRequiredMixin, ListView):
         context['selected_risk_level'] = self.request.GET.get('risk_level', '')
         context['selected_status'] = self.request.GET.get('status', '')
         context['selected_assigned_by'] = self.request.GET.get('assigned_by', '')
-        context['selected_assigned_to'] = self.request.GET.get('assigned_to', '')
+        context['selected_assigned_to'] = selected_assigned_to
 
         return context
 class HazardCreateView(LoginRequiredMixin, CreateView):

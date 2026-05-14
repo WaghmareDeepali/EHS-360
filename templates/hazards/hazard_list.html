@@ -456,6 +456,10 @@ window.addEventListener('load', function () {
             width: '100%'
         });
 
+        $('#assignedByFilter').on('change', function () {
+            this.form.submit();
+        });
+
     } else {
 
         console.log('jQuery not loaded');
