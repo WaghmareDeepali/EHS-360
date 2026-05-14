@@ -441,6 +441,7 @@ class UserUpdateView(LoginRequiredMixin, UpdateView):
         old_role = old_user.role
         
         user = form.save(commit=False)
+        user.is_active = old_user.is_active
         
         if not (self.request.user.is_superuser or self.request.user.is_admin_user):
             user.role = old_user.role
