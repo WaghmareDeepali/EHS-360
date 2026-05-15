@@ -42,8 +42,14 @@ def _build_scope_queryset(schedule_queryset, user_queryset, primary_id=None, chi
     return child_model.objects.none() if child_model else schedule_queryset.none()
 
 
-def _get_inspection_scope(schedule):
+def _get_inspection_scope(schedule, user=None):
     plants = schedule.plants.filter(is_active=True).order_by('name').distinct()
+    user_plant_ids = []
+
+    if user is not None:
+        user_plant_ids = [plant.id for plant in user.get_all_plants() if getattr(plant, 'is_active', True)]
+        if user_plant_ids:
+            plants = plants.filter(id__in=user_plant_ids)
 
     zones = schedule.zones.filter(is_active=True)
     if not zones.exists() and plants.exists():
@@ -855,7 +861,7 @@ def schedule_list(request):
             Q(assigned_users__last_name__icontains=search)
         )
     
-    schedules = schedules.distinct().order_by('-scheduled_date', '-created_at')
+    schedules = schedules.distinct().order_by('-created_at')
     
     paginator = Paginator(schedules, 20)
     page_number = request.GET.get('page')
@@ -1309,14 +1315,14 @@ def my_inspections(request):
     
     schedules = InspectionSchedule.objects.filter(
         assigned_to=request.user
-    ).select_related('template', 'department').order_by('-scheduled_date', '-created_at')
+    ).select_related('template', 'department').order_by('-created_at')
     
     # Filters
     status = request.GET.get('status')
     if status:
         schedules = schedules.filter(status=status)
     
-    schedules = schedules.order_by('-scheduled_date')
+    schedules = schedules.order_by('-created_at')
     
     # Pagination
     paginator = Paginator(schedules, 15)
@@ -1393,7 +1399,7 @@ def inspection_start(request, schedule_id):
     # Sort by category display order
     questions_by_category = dict(questions_by_category.items()) #removed - ,sorted(key=lambda x: x[0].display_order)
 
-    inspection_scope = _get_inspection_scope(schedule)
+    inspection_scope = _get_inspection_scope(schedule, request.user)
     available_plants = inspection_scope['plants']
     available_zones = inspection_scope['zones']
     available_locations = inspection_scope['locations']
@@ -1461,7 +1467,7 @@ def inspection_submit(request, schedule_id):
         return redirect('inspections:inspection_start', schedule_id=schedule_id)
     try:
         with transaction.atomic():
-            inspection_scope = _get_inspection_scope(schedule)
+            inspection_scope = _get_inspection_scope(schedule, request.user)
             available_plants = inspection_scope['plants']
             available_zones = inspection_scope['zones']
             available_locations = inspection_scope['locations']

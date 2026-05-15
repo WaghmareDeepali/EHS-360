@@ -188,8 +188,10 @@
                                     <span class="badge 
                                         {% if schedule.status == 'SCHEDULED' %}badge-primary
                                         {% elif schedule.status == 'IN_PROGRESS' %}badge-warning
-                                        {% elif schedule.status == 'COMPLETED' or schedule.status == 'LATE_CLOSE' %}badge-success
+                                        {% elif schedule.status == 'CLOSED' %}badge-success
                                         {% elif schedule.status == 'OVERDUE' %}badge-danger
+                                        {% elif schedule.status == 'LATE_CLOSE' %}badge-danger
+                                        {% elif schedule.status == 'CANCELLED' %}badge-secondary
                                         {% else %}badge-secondary{% endif %}">
                                         {{ schedule.get_status_display }}
                                     </span>
@@ -204,7 +206,7 @@
                                         </a>
                                         {% endif %}
                                         {% if user|has_perm:'EDIT_INSPECTION' %}
-                                        {% if schedule.status != 'COMPLETED' and schedule.status != 'LATE_CLOSE' and schedule.status != 'CANCELLED' %}
+                                        {% if schedule.status != 'CLOSED' and schedule.status != 'LATE_CLOSE' and schedule.status != 'CANCELLED' %}
                                         <a href="{% url 'inspections:schedule_edit' schedule.pk %}" 
                                         class="btn btn-sm btn-warning" title="Edit">
                                             <i class="fas fa-edit"></i>

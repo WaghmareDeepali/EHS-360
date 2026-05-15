@@ -506,12 +506,12 @@
                                     <button type="button" class="btn btn-outline-primary btn-sm mt-2 add-more-photos" data-hazard-index="0">
                                         <i class="fas fa-plus"></i> Add More Photos
                                     </button>
-                                    <button type="button" class="btn btn-outline-danger btn-sm mt-2 ml-2 upload-videos-btn" data-hazard-index="0">
+                                    {% comment %}<button type="button" class="btn btn-outline-danger btn-sm mt-2 ml-2 upload-videos-btn" data-hazard-index="0">
                                         <i class="fas fa-video"></i> Upload Videos
                                     </button>
                                     <input type="file" name="hazard_0_videos" id="hazard_0_videos"
                                         class="d-none hazard-video-input" accept="video/*" multiple
-                                        data-hazard-index="0">
+                                        data-hazard-index="0">{% endcomment %}
                                     <input type="file" id="hazard_0_videos_camera"
                                         class="d-none hazard-video-camera-input"
                                         accept="video/*" capture="environment"
@@ -1020,9 +1020,9 @@ $(document).ready(function() {
                         <i class="fas fa-plus"></i> Add More Photos
                     </button>
 
-                    <button type="button" class="btn btn-outline-danger btn-sm mt-2 ml-2 upload-videos-btn" data-hazard-index="${index}">
+                    {% comment %}<button type="button" class="btn btn-outline-danger btn-sm mt-2 ml-2 upload-videos-btn" data-hazard-index="${index}">
                         <i class="fas fa-video"></i> Upload Videos
-                    </button>
+                    </button>{% endcomment %}
 
                     <input type="file" name="hazard_${index}_videos"
                         id="hazard_${index}_videos"
