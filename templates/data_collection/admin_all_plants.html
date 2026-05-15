@@ -113,10 +113,10 @@
 }
 
 .data-table {
-    min-width: 1200px;
     width: 100%;
     border-collapse: collapse;
     background: white;
+    table-layout: auto;
 }
 
 .data-table th {
@@ -130,7 +130,7 @@
     padding: 12px 14px;
     border-bottom: 1px solid #e5e7eb;
     text-align: center;
-    white-space: nowrap;
+    vertical-align: middle;
 }
 
 .data-table td:first-child,
@@ -141,11 +141,23 @@
     background: #ffffff;
     z-index: 2;
     font-weight: 600;
+
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
+
+    white-space: normal;
+    word-break: break-word;
 }
 
 .data-table thead th:first-child {
     z-index: 3;
     background: #f1f5f9;
+}
+
+.data-table th:not(:first-child),
+.data-table td:not(:first-child) {
+    min-width: 120px;
 }
 
 .btn-export {
@@ -196,7 +208,7 @@
                     <label>Month</label>
                     <select name="month" class="form-control">
                         <option value="all" {% if selected_month == 'all' %}selected{% endif %}>All Months</option>
-                        {% for month in months %}
+                        {% for month in all_months %}
                         <option value="{{ month.code }}" {% if selected_month == month.code %}selected{% endif %}>{{ month.label }}</option>
                         {% endfor %}
                     </select>

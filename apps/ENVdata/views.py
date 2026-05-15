@@ -1275,6 +1275,7 @@ class AdminAllPlantsDataView(LoginRequiredMixin, View):
         selected_plant_ids = request.GET.getlist("plant_ids")
         selected_month = request.GET.get("month", "all")
         selected_fy = request.GET.get("financial_year") or get_financial_year_label(get_financial_year_start_year())
+        all_months = get_financial_year_months(selected_fy)
 
         selected_plants = list(all_plants.filter(id__in=selected_plant_ids)) if selected_plant_ids else list(all_plants)
         if not selected_plants:
@@ -1295,6 +1296,7 @@ class AdminAllPlantsDataView(LoginRequiredMixin, View):
             "selected_month": selected_month,
             "selected_financial_year": selected_fy,
             "financial_year_options": get_financial_year_options(),
+            "all_months": all_months,
             "months": report_data["months"],
             "questions_data": report_data["questions_data"] if aggregate_view else report_data["plants_data"][0]["questions_data"],
             "display_title": "Combined Total" if aggregate_view else selected_plants[0].name,
