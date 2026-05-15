@@ -1486,21 +1486,36 @@ class ExportHazardsView(LoginRequiredMixin, View):
 
         # --- Data Population ---
         for hazard in queryset:
+            reporter = hazard.reported_by
+            reporter_name = reporter.get_full_name().strip() if reporter else ''
+            if reporter and not reporter_name:
+                reporter_name = reporter.username or reporter.email or 'N/A'
+
+            reporter_department = getattr(getattr(reporter, 'department', None), 'name', '')
+            if reporter_name and reporter_department:
+                reported_by_display = f"{reporter_name} ({reporter_department})"
+            elif reporter_name:
+                reported_by_display = reporter_name
+            elif reporter_department:
+                reported_by_display = reporter_department
+            else:
+                reported_by_display = 'N/A'
+
             row_data = [
-                hazard.report_number,
-                hazard.hazard_title,
-                hazard.get_hazard_type_display(),
-                hazard.get_hazard_category_display(),
-                hazard.get_severity_display(),
-                hazard.get_status_display(),
+                hazard.report_number or '',
+                hazard.hazard_title or '',
+                hazard.get_hazard_type_display() if hazard.hazard_type else '',
+                hazard.get_hazard_category_display() if hazard.hazard_category else '',
+                hazard.get_severity_display() if hazard.severity else '',
+                hazard.get_status_display() if hazard.status else '',
                 hazard.incident_datetime.strftime('%Y-%m-%d %H:%M') if hazard.incident_datetime else '',
-                f"{hazard.reported_by.get_full_name()} ({hazard.reported_by.department.name})" if hazard.reported_by else 'N/A',
+                reported_by_display,
                 hazard.created_at.strftime('%Y-%m-%d') if hazard.created_at else '',
                 hazard.plant.name if hazard.plant else 'N/A',
                 hazard.zone.name if hazard.zone else 'N/A',
                 hazard.location.name if hazard.location else 'N/A',
                 hazard.sublocation.name if hazard.sublocation else 'N/A',
-                hazard.hazard_description,
+                hazard.hazard_description or '',
                 hazard.action_deadline.strftime('%Y-%m-%d') if hazard.action_deadline else ''
             ]
             sheet.append(row_data)
