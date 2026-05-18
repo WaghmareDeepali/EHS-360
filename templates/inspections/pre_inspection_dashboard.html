@@ -10,6 +10,27 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
 {# Naye card design aur overall look ke liye CSS #}
 <style>
+  .filter-section {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .active-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #eef2ff;
+    color: #334155;
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    margin: 0.25rem 0.4rem 0.25rem 0;
+    font-size: 0.85rem;
+  }
+  .active-filter-badge i {
+    margin-left: 0.5rem;
+    cursor: pointer;
+  }
   .stat-card-v2 {
     display: flex;
     align-items: center;
@@ -59,8 +80,111 @@
   .border-left-danger {
     border-left: 5px solid #e74a3b;
   }
+  .chart-panel {
+    background: #fff;
+    border: 1px solid #e3e6f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.12);
+  }
+  .metric-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: .8rem;
+    font-weight: 700;
+  }
+  .metric-closed { background: #e8f5e9; color: #1e7e34; }
+  .metric-pending { background: #fff3cd; color: #b8860b; }
+  .metric-progress { background: #d1ecf1; color: #117a8b; }
+  .metric-cancelled { background: #e2e3e5; color: #495057; }
+  .metric-overdue { background: #f8d7da; color: #bd2130; }
+  .metric-late-close { background: #e9d8fd; color: #6f42c1; }
+  .tracker-panel {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    overflow: hidden;
+  }
+  .tracker-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e5e7eb;
+    background: rgba(255,255,255,.92);
+  }
+  .tracker-panel-header .eyebrow {
+    display: block;
+    font-size: .78rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .tracker-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 18px 18px 8px;
+  }
+  .tracker-scroll::-webkit-scrollbar {
+    height: 10px;
+  }
+  .tracker-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+  }
+  .chart-wrap {
+    min-width: 100%;
+    height: 380px;
+  }
+  .chart-wrap canvas {
+    height: 100% !important;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .summary-card {
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  }
+  .summary-card .label {
+    display: block;
+    color: #6c757d;
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 6px;
+  }
+  .summary-card .value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.1;
+  }
+  .summary-card .meta {
+    display: block;
+    margin-top: 6px;
+    color: #6c757d;
+    font-size: .85rem;
+  }
   .list-group-item:hover {
         background-color: #f8f9fc;
+  }
+  @media (max-width: 991.98px) {
+    .summary-grid {
+      grid-template-columns: 1fr;
+    }
+    .tracker-panel-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 </style>
 {% endblock %}
@@ -71,6 +195,99 @@
 {% endblock %}
 
 {% block content %}
+<div class="filter-section">
+    <form method="GET" action="{% url 'inspections:inspection_dashboard' %}" id="filterForm">
+        <div class="row align-items-end">
+            <div class="col-md-3 mb-3">
+                <label for="plant_filter" class="small font-weight-bold"><i class="fas fa-industry mr-1"></i> Plant</label>
+                <select name="plant" id="plant_filter" class="form-control">
+                    <option value="">All Plants</option>
+                    {% for plant in plants %}
+                    <option value="{{ plant.id }}" {% if selected_plant == plant.id|stringformat:"s" %}selected{% endif %}>{{ plant.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="zone_filter" class="small font-weight-bold"><i class="fas fa-map-marker-alt mr-1"></i> Zone</label>
+                <select name="zone" id="zone_filter" class="form-control">
+                    <option value="">All Zones</option>
+                    {% for zone in zones %}
+                    <option value="{{ zone.id }}" {% if selected_zone == zone.id|stringformat:"s" %}selected{% endif %}>{{ zone.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="location_filter" class="small font-weight-bold"><i class="fas fa-location-arrow mr-1"></i> Location</label>
+                <select name="location" id="location_filter" class="form-control">
+                    <option value="">All Locations</option>
+                    {% for location in locations %}
+                    <option value="{{ location.id }}" {% if selected_location == location.id|stringformat:"s" %}selected{% endif %}>{{ location.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="sublocation_filter" class="small font-weight-bold"><i class="fas fa-map-pin mr-1"></i> Sub-Location</label>
+                <select name="sublocation" id="sublocation_filter" class="form-control">
+                    <option value="">All Sub-Locations</option>
+                    {% for sublocation in sublocations %}
+                    <option value="{{ sublocation.id }}" {% if selected_sublocation == sublocation.id|stringformat:"s" %}selected{% endif %}>{{ sublocation.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="department_filter" class="small font-weight-bold"><i class="fas fa-building mr-1"></i> Department</label>
+                <select name="department" id="department_filter" class="form-control">
+                    <option value="">All Departments</option>
+                    {% for dept in all_departments %}
+                    <option value="{{ dept.id }}" {% if selected_department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="template_filter" class="small font-weight-bold"><i class="fas fa-clipboard-list mr-1"></i> Template</label>
+                <select name="template" id="template_filter" class="form-control">
+                    <option value="">All Templates</option>
+                    {% for template in all_templates %}
+                    <option value="{{ template.id }}" {% if selected_template == template.id|stringformat:"s" %}selected{% endif %}>{{ template.template_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="month_filter" class="small font-weight-bold"><i class="fas fa-calendar mr-1"></i> Month</label>
+                <select name="month" id="month_filter" class="form-control">
+                    <option value="">All Time</option>
+                    {% for month in month_options %}
+                    <option value="{{ month.value }}" {% if selected_month == month.value %}selected{% endif %}>{{ month.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter mr-1"></i> Apply Filters
+                </button>
+            </div>
+        </div>
+
+        {% if has_active_filters %}
+        <div class="row mt-2">
+            <div class="col-12">
+                <strong>Active Filters:</strong>
+                {% if selected_plant_name %}<span class="active-filter-badge">Plant: {{ selected_plant_name }}<i class="fas fa-times" onclick="removeFilter(event, 'plant')"></i></span>{% endif %}
+                {% if selected_zone_name %}<span class="active-filter-badge">Zone: {{ selected_zone_name }}<i class="fas fa-times" onclick="removeFilter(event, 'zone')"></i></span>{% endif %}
+                {% if selected_location_name %}<span class="active-filter-badge">Location: {{ selected_location_name }}<i class="fas fa-times" onclick="removeFilter(event, 'location')"></i></span>{% endif %}
+                {% if selected_sublocation_name %}<span class="active-filter-badge">Sub-Location: {{ selected_sublocation_name }}<i class="fas fa-times" onclick="removeFilter(event, 'sublocation')"></i></span>{% endif %}
+                {% if selected_department_name %}<span class="active-filter-badge">Dept: {{ selected_department_name }}<i class="fas fa-times" onclick="removeFilter(event, 'department')"></i></span>{% endif %}
+                {% if selected_template_name %}<span class="active-filter-badge">Template: {{ selected_template_name }}<i class="fas fa-times" onclick="removeFilter(event, 'template')"></i></span>{% endif %}
+                {% if selected_month_label %}<span class="active-filter-badge">Month: {{ selected_month_label }}<i class="fas fa-times" onclick="removeFilter(event, 'month')"></i></span>{% endif %}
+                <a href="{% url 'inspections:inspection_dashboard' %}" class="btn btn-sm btn-outline-danger ml-2">
+                    <i class="fas fa-times-circle"></i> Clear All
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-lg-3 col-md-6 mb-4">
@@ -95,7 +312,7 @@
         <div class="stat-card-v2">
             <div class="icon-circle bg-green"><i class="fas fa-calendar-day"></i></div>
             <div class="info">
-                <span class="title">This Month </span>
+                <span class="title">{{ this_month_label }}</span>
                 <span class="value">{{ this_month_inspections }}</span>
             </div>
         </div>
@@ -106,6 +323,58 @@
             <div class="info">
                 <span class="title">Avg. Compliance</span>
                 <span class="value">{{ average_compliance_score }}%</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="chart-panel">
+            <div class="card-header bg-white border-0 pt-3">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar mr-2 text-primary"></i>
+                    Plant Wise Inspection Status
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if plant_chart_data %}
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <span class="label">Plants Covered</span>
+                        <span class="value">{{ plant_summary.plants_covered }}</span>
+                        <span class="meta">Across current filters</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="label">Top Plant by Schedules</span>
+                        <span class="value">{{ plant_summary.top_plant_total }}</span>
+                        <span class="meta">{{ plant_summary.top_plant_name }}</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="label">Overdue in Top Plant</span>
+                        <span class="value">{{ plant_summary.top_plant_overdue }}</span>
+                        <span class="meta">Pending attention in {{ plant_summary.top_plant_name }}</span>
+                    </div>
+                </div>
+                <div class="tracker-panel">
+                    <div class="tracker-panel-header">
+                        <div>
+                            <span class="eyebrow">Plant Inspection Tracker</span>
+                        </div>
+                        
+                    </div>
+                    <div class="tracker-scroll">
+                        <div class="chart-wrap" id="plantChartStage">
+                            <canvas id="inspectionStatusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                    No plant-wise inspection data is available for the selected filters.
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -167,29 +436,7 @@
 
 <!-- Action Cards -->
 <div class="row mb-4">
-    {% if user|has_perm:'CREATE_INSPECTION' %}
-    <div class="col-md-6 mb-3">
-        <div class="card h-100 border-0 shadow-sm text-center">
-            <div class="card-body d-flex flex-column justify-content-center"><div class="mb-3">
-                <a href="{% url 'inspections:schedule_create' %}" class="btn btn-primary btn-lg rounded-circle" style="width: 70px; height: 70px; line-height: 50px;"><i class="fas fa-calendar-plus fa-2x"></i></a></div>
-                <h5 class="card-title">Schedule New Inspection</h5>
-                <p class="card-text text-muted">Assign a new inspection to a user</p>
-                <div class="d-flex justify-content-center"><a href="{% url 'inspections:schedule_create' %}" class="btn btn-primary btn-md"><i class="fas fa-plus mr-2"></i> Create Schedule</a></div>
-            </div>
-        </div>
-    </div> 
-    {% endif %}
-    <div class="col-md-6 mb-3">
-        {% if user|has_perm:'VIEW_INSPECTION' %}
-        <div class="card h-100 border-0 shadow-sm text-center">
-            <div class="card-body d-flex flex-column justify-content-center"><div class="mb-3">
-                <a href="{% url 'inspections:schedule_list' %}" class="btn btn-success btn-lg rounded-circle" style="width: 70px; height: 70px; line-height: 50px;"><i class="fas fa-list fa-2x"></i></a></div>
-                <h5 class="card-title">View All Schedules</h5>
-                <p class="card-text text-muted">Browse and filter all scheduled inspections</p>
-                <div class="d-flex justify-content-center"><a href="{% url 'inspections:schedule_list' %}" class="btn btn-success btn-md"><i class="fas fa-folder-open mr-2"></i> View All</a></div>
-            </div>
-        </div>
-        {% endif %}
+    
     </div>
 </div>
 
@@ -244,7 +491,7 @@
 
                         {# Previous Button #}
                         <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
-                            <a class="page-link" href="{% if page_obj.has_previous %}?page={{ page_obj.previous_page_number }}{% else %}#{% endif %}">&laquo;</a>
+                            <a class="page-link" href="{% if page_obj.has_previous %}?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}{% else %}#{% endif %}">&laquo;</a>
                         </li>
 
                         {# Page Numbers #}
@@ -255,14 +502,14 @@
                                 </li>
                             {% else %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+                                    <a class="page-link" href="?page={{ i }}{% if querystring %}&{{ querystring }}{% endif %}">{{ i }}</a>
                                 </li>
                             {% endif %}
                         {% endfor %}
 
                         {# Next Button #}
                         <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
-                            <a class="page-link" href="{% if page_obj.has_next %}?page={{ page_obj.next_page_number }}{% else %}#{% endif %}">&raquo;</a>
+                            <a class="page-link" href="{% if page_obj.has_next %}?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}{% else %}#{% endif %}">&raquo;</a>
                         </li>
 
                     </ul>
@@ -274,10 +521,105 @@
 </div>
 
 <script>
+function removeFilter(evt, filterName) {
+    evt.preventDefault();
+    const url = new URL(window.location.href);
+    url.searchParams.delete(filterName);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
+
 document.addEventListener("DOMContentLoaded", function() {
-    // Horizontal Bar Chart for Non-Compliant Questions
-    var ctx = document.getElementById('nonComplianceChart').getContext('2d');
-    var nonComplianceChart = new Chart(ctx, {
+    var statusCanvas = document.getElementById('inspectionStatusChart');
+    if (statusCanvas) {
+        var plantLabels = {{ plant_chart_labels|safe }};
+        var plantChartStage = document.getElementById('plantChartStage');
+        if (plantChartStage) {
+            plantChartStage.style.width = Math.max(1100, plantLabels.length * 130) + 'px';
+        }
+        new Chart(statusCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: plantLabels,
+                datasets: [
+                    {
+                        label: 'Closed',
+                        data: {{ plant_closed_data|safe }},
+                        backgroundColor: 'rgba(40, 167, 69, 0.78)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Pending',
+                        data: {{ plant_pending_data|safe }},
+                        backgroundColor: 'rgba(255, 193, 7, 0.78)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'In Progress',
+                        data: {{ plant_in_progress_data|safe }},
+                        backgroundColor: 'rgba(23, 162, 184, 0.78)',
+                        borderColor: 'rgba(23, 162, 184, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Cancelled',
+                        data: {{ plant_cancelled_data|safe }},
+                        backgroundColor: 'rgba(108, 117, 125, 0.78)',
+                        borderColor: 'rgba(108, 117, 125, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Overdue',
+                        data: {{ plant_overdue_data|safe }},
+                        backgroundColor: 'rgba(220, 53, 69, 0.78)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Late Close',
+                        data: {{ plant_late_close_data|safe }},
+                        backgroundColor: 'rgba(111, 66, 193, 0.78)',
+                        borderColor: 'rgba(111, 66, 193, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'end'
+                },
+                scales: {
+                    xAxes: [{
+                        stacked: false,
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0
+                        }
+                    }],
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true,
+                            precision: 0
+                        }
+                    }]
+                }
+            }
+        });
+    }
+
+    var nonComplianceCanvas = document.getElementById('nonComplianceChart');
+    if (!nonComplianceCanvas) {
+        return;
+    }
+
+    new Chart(nonComplianceCanvas.getContext('2d'), {
         type: 'horizontalBar',
         data: {
             labels: {{ non_compliant_labels|safe }},

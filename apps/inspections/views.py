@@ -3,7 +3,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Q, Count, Prefetch
+from django.db.models import Q, Count, Prefetch, Value
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.core.paginator import EmptyPage, Paginator
 from django.urls import reverse
@@ -12,7 +13,7 @@ from django.db import transaction
 from django.views.generic import TemplateView
 from django.db.models import Count, Avg
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from django.core.paginator import Paginator
 import json
@@ -21,7 +22,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from .models import *
 from .forms import *
 from apps.notifications.services import NotificationService
-from apps.organizations.models import Plant, Zone, Location, SubLocation
+from apps.organizations.models import Plant, Zone, Location, SubLocation, Department
 
 
 
@@ -1608,7 +1609,7 @@ def inspection_review(request, submission_id):
             request.user == submission.submitted_by or
             request.user.can_access_inspection_module):
         messages.error(request, 'Unauthorized access!')
-        return redirect('inspections:pre_inspection_dashboard')
+        return redirect('inspections:inspection_dashboard')
 
     # ===================================================================
     # START OF THE FIX
@@ -2264,6 +2265,15 @@ class InspectionDashboardView(LoginRequiredMixin, TemplateView):
         """
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        today = timezone.now().date()
+
+        selected_plant = self.request.GET.get('plant', '')
+        selected_zone = self.request.GET.get('zone', '')
+        selected_location = self.request.GET.get('location', '')
+        selected_sublocation = self.request.GET.get('sublocation', '')
+        selected_department = self.request.GET.get('department', '')
+        selected_template = self.request.GET.get('template', '')
+        selected_month = self.request.GET.get('month', '')
 
         # --- 1. USER ACCESS CONTROL (Determine accessible plants) ---
         # This logic is adapted from your EnvironmentalDashboardView
@@ -2279,26 +2289,67 @@ class InspectionDashboardView(LoginRequiredMixin, TemplateView):
             else:
                 accessible_plants = assigned
 
-        # --- 2. Base Queryset for CLOSED Inspections (Filtered by accessible plants) ---
+        is_admin_user = user.is_superuser or user.is_staff or getattr(user, 'is_admin_user', False)
+
+        # --- 2. Build a filtered base schedule queryset for the whole dashboard ---
+        schedules_qs = InspectionSchedule.objects.select_related(
+            'template', 'assigned_to', 'department'
+        ).prefetch_related(
+            'plants', 'zones', 'locations', 'sublocations'
+        )
+
+        if not is_admin_user:
+            schedules_qs = schedules_qs.filter(
+                Q(plants__in=accessible_plants) | Q(plants__isnull=True)
+            )
+
+        schedules_qs = schedules_qs.distinct()
+
+        if selected_month:
+            try:
+                year, month = map(int, selected_month.split('-'))
+                schedules_qs = schedules_qs.filter(
+                    scheduled_date__year=year,
+                    scheduled_date__month=month
+                )
+                context['selected_month_label'] = datetime(year, month, 1).strftime('%B %Y')
+            except (ValueError, TypeError):
+                selected_month = ''
+
+        if selected_plant:
+            schedules_qs = schedules_qs.filter(plants__id=selected_plant)
+        if selected_zone:
+            schedules_qs = schedules_qs.filter(zones__id=selected_zone)
+        if selected_location:
+            schedules_qs = schedules_qs.filter(locations__id=selected_location)
+        if selected_sublocation:
+            schedules_qs = schedules_qs.filter(sublocations__id=selected_sublocation)
+        if selected_department:
+            schedules_qs = schedules_qs.filter(department_id=selected_department)
+        if selected_template:
+            schedules_qs = schedules_qs.filter(template_id=selected_template)
+
+        schedules_qs = schedules_qs.distinct()
+
         submissions = (
             InspectionSubmission.objects
             .select_related('schedule', 'schedule__template', 'submitted_by')
             .prefetch_related('schedule__plants')
-            .filter(
-                Q(schedule__plants__in=accessible_plants) |
-                Q(schedule__plants__isnull=True)
-            )
+            .filter(schedule__in=schedules_qs)
             .order_by('-submitted_at')
             .distinct()
         )
+
         # --- 3. Top Statistics Cards Data (Filtered) ---
         total_inspections = submissions.count()
         current_month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        schedules_qs = (InspectionSchedule.objects.filter(plants__in=accessible_plants).distinct())
 
         context['total_inspections'] = total_inspections
         context['open_schedules'] = schedules_qs.filter(status__in=['SCHEDULED', 'IN_PROGRESS', 'OVERDUE']).count()
-        context['this_month_inspections'] = submissions.filter(submitted_at__gte=current_month_start).count()
+        context['this_month_inspections'] = (
+            submissions.count() if selected_month else submissions.filter(submitted_at__gte=current_month_start).count()
+        )
+        context['this_month_label'] = context.get('selected_month_label', 'This Month')
 
         # New Stat: Average Compliance Score (Calculated from filtered submissions)
         if total_inspections > 0:
@@ -2306,12 +2357,53 @@ class InspectionDashboardView(LoginRequiredMixin, TemplateView):
             context['average_compliance_score'] = round(avg, 2) if avg else 0
         else:
             context['average_compliance_score'] = 0
-        context['overdue_inspections'] = (schedules_qs.filter(status='OVERDUE').select_related('assigned_to')
-        .prefetch_related('plants').order_by('-due_date')[:5])
+        context['overdue_inspections'] = (
+            schedules_qs.filter(status='OVERDUE')
+            .select_related('assigned_to')
+            .prefetch_related('plants')
+            .order_by('-due_date')[:5]
+        )
+
+        plant_summary = list(
+            schedules_qs.annotate(
+                display_plant_name=Coalesce('plants__name', Value('Unassigned'))
+            ).values(
+                'plants__id',
+                'display_plant_name'
+            ).annotate(
+                total=Count('id', distinct=True),
+                closed_count=Count('id', filter=Q(status='CLOSED'), distinct=True),
+                pending_count=Count('id', filter=Q(status='SCHEDULED'), distinct=True),
+                in_progress_count=Count('id', filter=Q(status='IN_PROGRESS'), distinct=True),
+                cancelled_count=Count('id', filter=Q(status='CANCELLED'), distinct=True),
+                overdue_count=Count('id', filter=Q(status='OVERDUE'), distinct=True),
+                late_close_count=Count('id', filter=Q(status='LATE_CLOSE'), distinct=True),
+            ).order_by('-total', 'display_plant_name')
+        )
+
+        top_plant = plant_summary[0] if plant_summary else None
+        context['plant_chart_labels'] = json.dumps([item['display_plant_name'] for item in plant_summary])
+        context['plant_closed_data'] = json.dumps([item['closed_count'] for item in plant_summary])
+        context['plant_pending_data'] = json.dumps([item['pending_count'] for item in plant_summary])
+        context['plant_in_progress_data'] = json.dumps([item['in_progress_count'] for item in plant_summary])
+        context['plant_cancelled_data'] = json.dumps([item['cancelled_count'] for item in plant_summary])
+        context['plant_overdue_data'] = json.dumps([item['overdue_count'] for item in plant_summary])
+        context['plant_late_close_data'] = json.dumps([item['late_close_count'] for item in plant_summary])
+        context['plant_chart_data'] = bool(plant_summary)
+        context['plant_summary'] = {
+            'plants_covered': len(plant_summary),
+            'top_plant_name': top_plant['display_plant_name'] if top_plant else 'N/A',
+            'top_plant_total': top_plant['total'] if top_plant else 0,
+            'top_plant_overdue': top_plant['overdue_count'] if top_plant else 0,
+        }
 
         # --- 5. Top Non-Compliant Questions Chart Data (Filtered) ---
-        top_non_compliant = (InspectionResponse.objects.filter(submission__schedule__plants__in=accessible_plants,answer='No')
-        .values('question__question_text').annotate(no_count=Count('id')).order_by('-no_count')[:5])
+        top_non_compliant = (
+            InspectionResponse.objects.filter(submission__in=submissions, answer='No')
+            .values('question__question_text')
+            .annotate(no_count=Count('id'))
+            .order_by('-no_count')[:5]
+        )
         chart_labels = [i['question__question_text'] for i in top_non_compliant]
         chart_data = [i['no_count'] for i in top_non_compliant]
 
@@ -2331,6 +2423,95 @@ class InspectionDashboardView(LoginRequiredMixin, TemplateView):
             page_obj = paginator.get_page(1)
 
         context['page_obj'] = page_obj
+
+        plants_qs = accessible_plants.order_by('name').distinct()
+
+        zones_qs = Zone.objects.filter(is_active=True)
+        if not is_admin_user:
+            zones_qs = zones_qs.filter(plant__in=accessible_plants)
+        if selected_plant:
+            zones_qs = zones_qs.filter(plant_id=selected_plant)
+
+        locations_qs = Location.objects.filter(is_active=True)
+        if not is_admin_user:
+            locations_qs = locations_qs.filter(zone__plant__in=accessible_plants)
+        if selected_zone:
+            locations_qs = locations_qs.filter(zone_id=selected_zone)
+        elif selected_plant:
+            locations_qs = locations_qs.filter(zone__plant_id=selected_plant)
+
+        sublocations_qs = SubLocation.objects.filter(is_active=True)
+        if not is_admin_user:
+            sublocations_qs = sublocations_qs.filter(location__zone__plant__in=accessible_plants)
+        if selected_location:
+            sublocations_qs = sublocations_qs.filter(location_id=selected_location)
+        elif selected_zone:
+            sublocations_qs = sublocations_qs.filter(location__zone_id=selected_zone)
+        elif selected_plant:
+            sublocations_qs = sublocations_qs.filter(location__zone__plant_id=selected_plant)
+
+        template_qs = InspectionTemplate.objects.filter(schedules__in=schedules_qs).distinct().order_by('template_name')
+        department_qs = Department.objects.filter(inspection_schedules__in=schedules_qs).distinct().order_by('name')
+
+        context['plants'] = plants_qs
+        context['zones'] = zones_qs.order_by('name').distinct()
+        context['locations'] = locations_qs.order_by('name').distinct()
+        context['sublocations'] = sublocations_qs.order_by('name').distinct()
+        context['all_templates'] = template_qs
+        context['all_departments'] = department_qs
+        context['month_options'] = [{
+            'value': (today - timedelta(days=i * 30)).strftime('%Y-%m'),
+            'label': (today - timedelta(days=i * 30)).strftime('%B %Y')
+        } for i in range(12)]
+
+        context.update({
+            'selected_plant': selected_plant,
+            'selected_zone': selected_zone,
+            'selected_location': selected_location,
+            'selected_sublocation': selected_sublocation,
+            'selected_department': selected_department,
+            'selected_template': selected_template,
+            'selected_month': selected_month,
+        })
+
+        if selected_plant:
+            plant_obj = Plant.objects.filter(pk=selected_plant).first()
+            if plant_obj:
+                context['selected_plant_name'] = plant_obj.name
+        if selected_zone:
+            zone_obj = Zone.objects.filter(pk=selected_zone).first()
+            if zone_obj:
+                context['selected_zone_name'] = zone_obj.name
+        if selected_location:
+            location_obj = Location.objects.filter(pk=selected_location).first()
+            if location_obj:
+                context['selected_location_name'] = location_obj.name
+        if selected_sublocation:
+            sublocation_obj = SubLocation.objects.filter(pk=selected_sublocation).first()
+            if sublocation_obj:
+                context['selected_sublocation_name'] = sublocation_obj.name
+        if selected_department:
+            department_obj = Department.objects.filter(pk=selected_department).first()
+            if department_obj:
+                context['selected_department_name'] = department_obj.name
+        if selected_template:
+            template_obj = InspectionTemplate.objects.filter(pk=selected_template).first()
+            if template_obj:
+                context['selected_template_name'] = template_obj.template_name
+
+        context['has_active_filters'] = any([
+            selected_plant,
+            selected_zone,
+            selected_location,
+            selected_sublocation,
+            selected_department,
+            selected_template,
+            selected_month,
+        ])
+
+        querydict = self.request.GET.copy()
+        querydict.pop('page', None)
+        context['querystring'] = querydict.urlencode()
 
         return context
 
