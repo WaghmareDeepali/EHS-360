@@ -172,6 +172,14 @@ class HazardListView(LoginRequiredMixin, ListView):
                 if email.strip()
             ]
             assigned_emails.extend(emails)
+
+        context['assigned_to_users'] = User.objects.filter(
+            email__in=assigned_emails,
+            is_active=True,
+            is_superuser=False,
+            is_active_employee=True
+        ).distinct().order_by('first_name', 'last_name')
+
         if selected_assigned_to:
             valid_user_exists = context['assigned_to_users'].filter(
                 id=selected_assigned_to
