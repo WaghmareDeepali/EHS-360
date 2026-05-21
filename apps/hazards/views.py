@@ -1399,142 +1399,85 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         }
 
         # =====================================
-        # Plant Wise FY Monthly Trend
+        # Plant Wise Hazard Status Tracker
         # =====================================
+        plant_summary_map = {}
+        hazard_status_qs = filtered_hazards.select_related('plant').prefetch_related('action_items')
 
-        fy_months = []
+        for hazard in hazard_status_qs:
+            plant_obj = hazard.plant
+            plant_key = plant_obj.id if plant_obj else 'unassigned'
+            plant_name = plant_obj.name if plant_obj else 'Unassigned'
 
-        if today.month >= 4:
+            if plant_key not in plant_summary_map:
+                plant_summary_map[plant_key] = {
+                    'plant_id': plant_obj.id if plant_obj else '',
+                    'plant_name': plant_name,
+                    'closed_count': 0,
+                    'pending_count': 0,
+                    'in_progress_count': 0,
+                    'cancelled_count': 0,
+                    'overdue_count': 0,
+                    'late_close_count': 0,
+                    'total': 0,
+                }
 
-            fy_start_year = today.year
-            fy_end_year = today.year + 1
+            row = plant_summary_map[plant_key]
+            row['total'] += 1
 
-        else:
+            effective_status = hazard.effective_status
+            if effective_status == 'CLOSED_LATE':
+                row['late_close_count'] += 1
+            elif effective_status == 'OVERDUE':
+                row['overdue_count'] += 1
+            elif effective_status in ['RESOLVED', 'CLOSED']:
+                row['closed_count'] += 1
+            elif effective_status == 'IN_PROGRESS':
+                row['in_progress_count'] += 1
+            elif effective_status == 'REJECTED':
+                row['cancelled_count'] += 1
+            else:
+                row['pending_count'] += 1
 
-            fy_start_year = today.year - 1
-            fy_end_year = today.year
+        plant_summary = sorted(
+            plant_summary_map.values(),
+            key=lambda item: (-item['total'], item['plant_name'])
+        )
 
-        fy_months = []
-
-        if today.month >= 4:
-
-            fy_start_year = today.year
-            fy_end_year = today.year + 1
-
-            start_month = 4
-            end_month = today.month
-
-        else:
-
-            fy_start_year = today.year - 1
-            fy_end_year = today.year
-
-            start_month = 4
-            end_month = today.month + 12
-
-        for i in range(start_month, end_month + 1):
-
-            actual_month = i if i <= 12 else i - 12
-
-            actual_year = (
-                fy_start_year
-                if i <= 12
-                else fy_end_year
-            )
-
-            fy_months.append({
-
-                'month': actual_month,
-
-                'year': actual_year,
-
-                'label': datetime.date(
-                    actual_year,
-                    actual_month,
-                    1
-                ).strftime('%b %Y')
+        top_plant = plant_summary[0] if plant_summary else None
+        plant_status_rows = []
+        for item in plant_summary:
+            total_count = item['total'] or 0
+            closed_percent = round((item['closed_count'] / total_count) * 100) if total_count else 0
+            plant_status_rows.append({
+                'plant_id': item['plant_id'],
+                'plant_name': item['plant_name'],
+                'closed_count': item['closed_count'],
+                'pending_count': item['pending_count'],
+                'in_progress_count': item['in_progress_count'],
+                'cancelled_count': item['cancelled_count'],
+                'overdue_count': item['overdue_count'],
+                'late_close_count': item['late_close_count'],
+                'total': total_count,
+                'closed_percent': closed_percent,
             })
 
-        plant_monthly_datasets = []
-
-        if selected_plant:
-            plants = Plant.objects.filter(
-                id=selected_plant,
-                is_active=True
-            )
-        else:
-            plants = Plant.objects.filter(
-                is_active=True
-            ).order_by('name')
-
-        total_plants = plants.count()
-
-        dynamic_colors = []
-
-        for i in range(total_plants):
-
-            hue = i / max(total_plants, 1)
-
-            rgb = colorsys.hsv_to_rgb(
-                hue,
-                0.7,
-                0.9
-            )
-
-            dynamic_colors.append(
-                '#{:02x}{:02x}{:02x}'.format(
-                    int(rgb[0] * 255),
-                    int(rgb[1] * 255),
-                    int(rgb[2] * 255)
-                )
-            )
-
-        for index, plant in enumerate(plants):
-
-            monthly_counts = []
-
-            for month_data in fy_months:
-
-                count = filtered_hazards.filter(
-                    plant=plant,
-                    incident_datetime__year=month_data['year'],
-                    incident_datetime__month=month_data['month']
-                ).count()
-
-                monthly_counts.append(count)
-
-            plant_monthly_datasets.append({
-
-                'label': plant.name,
-
-                'data': monthly_counts,
-
-                'borderColor':
-                    dynamic_colors[index],
-
-                'backgroundColor':
-                    dynamic_colors[index],
-
-                'tension': 0.4,
-
-                'fill': False,
-
-                'pointRadius': 4,
-
-                'pointHoverRadius': 7
-            })
-
-        context['plant_month_labels'] = json.dumps(
-            [m['label'] for m in fy_months]
-        )
-
-        context['plant_monthly_datasets'] = json.dumps(
-            plant_monthly_datasets
-        )
-
-        context['financial_year_label'] = (
-            f"FY {fy_start_year}-{str(fy_end_year)[-2:]}"
-        )
+        context['plant_chart_labels'] = json.dumps([item['plant_name'] for item in plant_summary])
+        context['plant_chart_ids'] = json.dumps([item['plant_id'] for item in plant_summary])
+        context['plant_closed_data'] = json.dumps([item['closed_count'] for item in plant_summary])
+        context['plant_pending_data'] = json.dumps([item['pending_count'] for item in plant_summary])
+        context['plant_in_progress_data'] = json.dumps([item['in_progress_count'] for item in plant_summary])
+        context['plant_cancelled_data'] = json.dumps([item['cancelled_count'] for item in plant_summary])
+        context['plant_overdue_data'] = json.dumps([item['overdue_count'] for item in plant_summary])
+        context['plant_late_close_data'] = json.dumps([item['late_close_count'] for item in plant_summary])
+        context['plant_chart_data'] = bool(plant_summary)
+        context['plant_status_rows'] = plant_status_rows
+        context['plant_summary'] = {
+            'plants_covered': len(plant_summary),
+            'top_plant_name': top_plant['plant_name'] if top_plant else 'N/A',
+            'top_plant_total': top_plant['total'] if top_plant else 0,
+            'top_plant_overdue': top_plant['overdue_count'] if top_plant else 0,
+        }
 
         return context
     
