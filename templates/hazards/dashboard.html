@@ -272,12 +272,8 @@
                   </span>
                 </td>
                 <td>
-                  <span class="badge 
-                    {% if hazard.status == 'CLOSED' or hazard.status == 'RESOLVED' %}badge-success
-                    {% elif hazard.status == 'REPORTED' %}badge-secondary
-                    {% elif hazard.status == 'IN_PROGRESS' %}badge-primary 
-                    {% else %}badge-dark{% endif %}">
-                    {{ hazard.get_status_display }}
+                  <span class="badge {{ hazard.status_badge_class }}">
+                    {{ hazard.effective_status_display }}
                   </span>
                 </td>
                 {% if user|has_perm:'VIEW_HAZARD' %}

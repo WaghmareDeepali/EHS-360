@@ -155,7 +155,7 @@ def generate_hazard_pdf(hazard):
     col_width_overview = drawable_width / 4
     overview_data = [
         [Paragraph("<b>Report Number:</b>", styles['Label']), Paragraph(hazard.report_number, styles['Value']), Paragraph("<b>Severity:</b>", styles['Label']), Paragraph(hazard.get_severity_display(), styles['Value'])],
-        [Paragraph("<b>Current Status:</b>", styles['Label']), Paragraph(hazard.get_status_display(), styles['Value']),],
+        [Paragraph("<b>Current Status:</b>", styles['Label']), Paragraph(hazard.effective_status_display, styles['Value']),],
         [Paragraph("<b>Date & Time:</b>", styles['Label']), Paragraph(hazard.incident_datetime.strftime('%d-%b-%Y, %I:%M %p'), styles['Value']), Paragraph("<b>Action Deadline:</b>", styles['Label']), Paragraph(hazard.action_deadline.strftime('%d-%b-%Y') if hazard.action_deadline else 'N/A', styles['Value'])],
     ]
     overview_table = Table(overview_data, colWidths=[col_width_overview] * 4)
