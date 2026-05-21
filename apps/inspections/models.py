@@ -707,7 +707,7 @@ class InspectionResponse(models.Model):
         'InspectionQuestion',
         on_delete=models.CASCADE
     )
-    answer = models.CharField(max_length=10)
+    answer = models.TextField(blank=True)
     remarks = models.TextField(blank=True)
     photo = models.ImageField(upload_to='inspection_responses/', blank=True, null=True)
     answered_at = models.DateTimeField(auto_now_add=True)
