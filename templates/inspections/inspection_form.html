@@ -101,8 +101,15 @@
 {% endblock %}
 
 {% block content %}
-<form method="post" action="{% url 'inspections:inspection_submit' schedule.id %}" enctype="multipart/form-data">
+<form method="post" action="{% url 'inspections:inspection_submit' schedule.id %}" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
+    {% if non_field_errors %}
+    <div class="alert alert-danger">
+        {% for error in non_field_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
     
     <!-- Inspection Header -->
     <div class="card mb-3">
@@ -124,7 +131,7 @@
             <div class="row">
                 <div class="col-md-3">
                     <strong><i class="fas fa-industry"></i> Plant:</strong><br>
-                        {% for plant in schedule.plants.all %}
+                        {% for plant in header_plants %}
                             <span class="badge badge-info">{{ plant.name }}</span>
                         {% empty %}
                             -
@@ -174,6 +181,7 @@
                 <div class="checkbox-grid" id="plantsGrid">
                     <div class="loading-text">Loading plants...</div>
                 </div>
+                <div id="plantsError" class="text-danger small mt-2">{% if scope_errors.selected_plants %}{{ scope_errors.selected_plants }}{% endif %}</div>
             </div>
 
             <div class="mb-4">
@@ -193,6 +201,7 @@
                 <div class="checkbox-grid" id="zonesGrid">
                     <div class="loading-text">Please select plants first</div>
                 </div>
+                <div id="zonesError" class="text-danger small mt-2">{% if scope_errors.selected_zones %}{{ scope_errors.selected_zones }}{% endif %}</div>
             </div>
 
             <div class="mb-4">
@@ -212,6 +221,7 @@
                 <div class="checkbox-grid" id="locationsGrid">
                     <div class="loading-text">Please select zones first</div>
                 </div>
+                <div id="locationsError" class="text-danger small mt-2">{% if scope_errors.selected_locations %}{{ scope_errors.selected_locations }}{% endif %}</div>
             </div>
 
             <div class="mb-0">
@@ -231,6 +241,7 @@
                 <div class="checkbox-grid" id="sublocationsGrid">
                     <div class="loading-text">Please select locations first</div>
                 </div>
+                <div id="sublocationsError" class="text-danger small mt-2">{% if scope_errors.selected_sublocations %}{{ scope_errors.selected_sublocations }}{% endif %}</div>
             </div>
         </div>
     </div>
@@ -282,54 +293,57 @@
                 {% if tq.question.question_type == 'YES_NO' %}
                 <div class="form-group mb-2">
                     <label class="font-weight-bold">Answer:</label>
-                    <div class="btn-group btn-group-toggle d-block" data-toggle="buttons">
-                        <label class="btn btn-outline-success">
+                    <div class="btn-group btn-group-toggle d-block {% if tq.answer_error %}border border-danger rounded p-2{% endif %}" data-toggle="buttons" data-question-group="{{ tq.question.id }}">
+                        <label class="btn btn-outline-success {% if tq.prefill_answer == 'Yes' %}active{% endif %}">
                             <input type="radio" name="question_{{ tq.question.id }}" 
-                                   value="Yes" {% if tq.is_mandatory %}required{% endif %}>
+                                   value="Yes" {% if tq.prefill_answer == 'Yes' %}checked{% endif %}>
                             <i class="fas fa-check-circle"></i> Yes
                         </label>
-                        <label class="btn btn-outline-danger ml-2">
+                        <label class="btn btn-outline-danger ml-2 {% if tq.prefill_answer == 'No' %}active{% endif %}">
                             <input type="radio" name="question_{{ tq.question.id }}" 
-                                   value="No" {% if tq.is_mandatory %}required{% endif %}>
+                                   value="No" {% if tq.prefill_answer == 'No' %}checked{% endif %}>
                             <i class="fas fa-times-circle"></i> No
                         </label>
-                        <label class="btn btn-outline-secondary ml-2">
+                        <label class="btn btn-outline-secondary ml-2 {% if tq.prefill_answer == 'N/A' %}active{% endif %}">
                             <input type="radio" name="question_{{ tq.question.id }}" 
-                                   value="N/A" {% if not tq.is_mandatory %}{% endif %}>
+                                   value="N/A" {% if tq.prefill_answer == 'N/A' %}checked{% endif %}>
                             <i class="fas fa-minus-circle"></i> N/A
                         </label>
                     </div>
+                    <div class="text-danger small mt-1" id="error_question_{{ tq.question.id }}">{% if tq.answer_error %}{{ tq.answer_error }}{% endif %}</div>
                 </div>
                 
                 {% elif tq.question.question_type == 'TEXT' %}
                 <div class="form-group mb-2">
                     <label class="font-weight-bold">Answer:</label>
                     <input type="text" name="question_{{ tq.question.id }}" 
-                           class="form-control" 
-                           {% if tq.is_mandatory %}required{% endif %}>
+                           class="form-control {% if tq.answer_error %}is-invalid{% endif %}" 
+                           value="{{ tq.prefill_answer }}">
+                    <div class="invalid-feedback" style="{% if tq.answer_error %}display:block;{% endif %}" id="error_question_{{ tq.question.id }}">{% if tq.answer_error %}{{ tq.answer_error }}{% endif %}</div>
                 </div>
                 
                 {% elif tq.question.question_type == 'NUMBER' %}
                 <div class="form-group mb-2">
                     <label class="font-weight-bold">Answer:</label>
                     <input type="number" name="question_{{ tq.question.id }}" 
-                           class="form-control" step="any"
-                           {% if tq.is_mandatory %}required{% endif %}>
+                           class="form-control {% if tq.answer_error %}is-invalid{% endif %}" step="any"
+                           value="{{ tq.prefill_answer }}">
+                    <div class="invalid-feedback" style="{% if tq.answer_error %}display:block;{% endif %}" id="error_question_{{ tq.question.id }}">{% if tq.answer_error %}{{ tq.answer_error }}{% endif %}</div>
                 </div>
                 
                 {% elif tq.question.question_type == 'RATING' %}
                 <div class="form-group mb-2">
                     <label class="font-weight-bold">Rating (1-5):</label>
                     <select name="question_{{ tq.question.id }}" 
-                            class="form-control" style="width: 150px;"
-                            {% if tq.is_mandatory %}required{% endif %}>
+                            class="form-control {% if tq.answer_error %}is-invalid{% endif %}" style="width: 150px;">
                         <option value="">Select...</option>
-                        <option value="1">1 - Poor</option>
-                        <option value="2">2 - Fair</option>
-                        <option value="3">3 - Good</option>
-                        <option value="4">4 - Very Good</option>
-                        <option value="5">5 - Excellent</option>
+                        <option value="1" {% if tq.prefill_answer == '1' %}selected{% endif %}>1 - Poor</option>
+                        <option value="2" {% if tq.prefill_answer == '2' %}selected{% endif %}>2 - Fair</option>
+                        <option value="3" {% if tq.prefill_answer == '3' %}selected{% endif %}>3 - Good</option>
+                        <option value="4" {% if tq.prefill_answer == '4' %}selected{% endif %}>4 - Very Good</option>
+                        <option value="5" {% if tq.prefill_answer == '5' %}selected{% endif %}>5 - Excellent</option>
                     </select>
+                    <div class="invalid-feedback" style="{% if tq.answer_error %}display:block;{% endif %}" id="error_question_{{ tq.question.id }}">{% if tq.answer_error %}{{ tq.answer_error }}{% endif %}</div>
                 </div>
                 {% endif %}
                 
@@ -340,10 +354,10 @@
                         {% if tq.question.is_remarks_mandatory %}<span class="text-danger">*</span>{% endif %}
                     </label>
                     <textarea name="remarks_{{ tq.question.id }}" 
-                              class="form-control" 
+                              class="form-control {% if tq.remarks_error %}is-invalid{% endif %}" 
                               rows="2"
-                              placeholder="Add your observations or comments..."
-                              {% if tq.question.is_remarks_mandatory %}required{% endif %}></textarea>
+                              placeholder="Add your observations or comments...">{{ tq.prefill_remarks }}</textarea>
+                    <div class="invalid-feedback" style="{% if tq.remarks_error %}display:block;{% endif %}" id="error_remarks_{{ tq.question.id }}">{% if tq.remarks_error %}{{ tq.remarks_error }}{% endif %}</div>
                 </div>
                 
                 <!-- Photo Upload -->
@@ -354,7 +368,7 @@
                         </label>
 
                         <!-- Click Area -->
-                        <div class="add-photo-btn" onclick="handleInspectionPhotoClick({{ tq.question.id }})">
+                        <div class="add-photo-btn {% if tq.photo_error %}border border-danger{% endif %}" onclick="handleInspectionPhotoClick({{ tq.question.id }})">
                             <i class="fas fa-plus-circle fa-2x text-primary mb-2"></i>
                             <p class="mb-0">Click to add photo</p>
                         </div>
@@ -375,11 +389,21 @@
                             capture="environment">
 
                         <!-- Preview -->
-                        <div id="preview_{{ tq.question.id }}" class="mt-2"></div>
+                        <div id="preview_{{ tq.question.id }}" class="mt-2" data-has-draft-photo="{% if tq.draft_photo %}1{% else %}0{% endif %}">
+                            {% if tq.draft_photo %}
+                            <div class="mb-2">
+                                <img src="{{ tq.draft_photo.photo.url }}"
+                                     style="width:120px;height:120px;object-fit:cover;border-radius:6px;"
+                                     alt="Saved draft photo">
+                                <small class="d-block text-muted mt-1">Saved in draft. You can keep it or upload a new one.</small>
+                            </div>
+                            {% endif %}
+                        </div>
 
                         <small class="form-text text-muted">
                             Photo is mandatory for this question
                         </small>
+                        <div class="text-danger small mt-1" id="error_photo_{{ tq.question.id }}">{% if tq.photo_error %}{{ tq.photo_error }}{% endif %}</div>
                     </div>
                 {% else %}
                     <div class="form-group mb-0">
@@ -408,7 +432,17 @@
                             capture="environment">
 
                         <!-- Preview -->
-                        <div id="preview_{{ tq.question.id }}" class="mt-2"></div>
+                        <div id="preview_{{ tq.question.id }}" class="mt-2" data-has-draft-photo="{% if tq.draft_photo %}1{% else %}0{% endif %}">
+                            {% if tq.draft_photo %}
+                            <div class="mb-2">
+                                <img src="{{ tq.draft_photo.photo.url }}"
+                                     style="width:120px;height:120px;object-fit:cover;border-radius:6px;"
+                                     alt="Saved draft photo">
+                                <small class="d-block text-muted mt-1">Saved in draft. You can keep it or upload a new one.</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="text-danger small mt-1" id="error_photo_{{ tq.question.id }}">{% if tq.photo_error %}{{ tq.photo_error }}{% endif %}</div>
                     </div>
                 {% endif %}
             </div>
@@ -423,10 +457,16 @@
             <p class="text-muted mb-3">
                 Please ensure all mandatory questions are answered before submitting.
             </p>
+            {% if draft_exists %}
+            <p class="text-info small mb-3">A saved draft is loaded in this form.</p>
+            {% endif %}
             <!-- <button type="button" class="btn btn-info me-2" onclick="previewNoAnswers()">
                     <i class="fas fa-eye"></i> Preview Non-Compliant Items
             </button> -->
-            <button type="submit" class="btn btn-success btn-lg mr-2" onclick="return confirm('Submit this inspection? This action cannot be changed later.')">
+            <button type="submit" name="form_action" value="draft" class="btn btn-outline-primary btn-lg mr-2">
+                <i class="fas fa-save"></i> Save Draft
+            </button>
+            <button type="submit" name="form_action" value="submit" class="btn btn-success btn-lg mr-2" onclick="return confirm('Submit this inspection? This action cannot be changed later.')">
                 <i class="fas fa-check"></i> Submit Inspection
             </button>
             <a href="{% url 'inspections:my_inspections' %}" class="btn btn-secondary btn-lg">
@@ -818,27 +858,113 @@ $(document).ready(function() {
         this.style.height = (this.scrollHeight) + 'px';
     });
     
-    // Form validation
+    var submitAction = 'submit';
+    $('button[name="form_action"]').on('click', function() {
+        submitAction = $(this).val();
+    });
+
+    function setFieldError(fieldName, message) {
+        var $field = $('[name="' + fieldName + '"]');
+        if ($field.attr('type') === 'radio') {
+            $('[data-question-group="' + fieldName.replace('question_', '') + '"]').addClass('border border-danger rounded p-2');
+            $('#error_' + fieldName).text(message);
+            return;
+        }
+        $field.addClass('is-invalid');
+        $('#error_' + fieldName).text(message).show();
+    }
+
+    function clearFieldError(fieldName) {
+        var $field = $('[name="' + fieldName + '"]');
+        if ($field.attr('type') === 'radio') {
+            $('[data-question-group="' + fieldName.replace('question_', '') + '"]').removeClass('border border-danger rounded p-2');
+            $('#error_' + fieldName).text('');
+            return;
+        }
+        $field.removeClass('is-invalid');
+        $('#error_' + fieldName).text('').hide();
+    }
+
+    function setScopeError(key, message) {
+        $('#' + key + 'Error').text(message);
+    }
+
+    function clearScopeError(key) {
+        $('#' + key + 'Error').text('');
+    }
+
     $('form').submit(function(e) {
-        var unanswered = [];
-        
-        // Check all mandatory radio button groups
-        $('input[type="radio"][required]').each(function() {
-            var name = $(this).attr('name');
-            if (!$('input[name="' + name + '"]:checked').length) {
-                unanswered.push(name);
-            }
-        });
-        
-        if (unanswered.length > 0) {
-            e.preventDefault();
-            alert('Please answer all mandatory questions before submitting!');
-            return false;
+        if (submitAction === 'draft') {
+            return true;
         }
 
+        var hasErrors = false;
+
+        clearScopeError('plants');
+        clearScopeError('zones');
+        clearScopeError('locations');
+        clearScopeError('sublocations');
+        $('[id^="error_question_"], [id^="error_remarks_"], [id^="error_photo_"]').text('').hide();
+        $('[name^="question_"], [name^="remarks_"]').removeClass('is-invalid');
+        $('[data-question-group]').removeClass('border border-danger rounded p-2');
+
         if (!document.querySelectorAll('.plant-checkbox:checked').length) {
+            setScopeError('plants', 'Please select at least one plant.');
+            hasErrors = true;
+        }
+        if (document.querySelectorAll('.zone-checkbox').length && !document.querySelectorAll('.zone-checkbox:checked').length) {
+            setScopeError('zones', 'Please select at least one zone.');
+            hasErrors = true;
+        }
+        if (document.querySelectorAll('.location-checkbox').length && !document.querySelectorAll('.location-checkbox:checked').length) {
+            setScopeError('locations', 'Please select at least one location.');
+            hasErrors = true;
+        }
+        if (document.querySelectorAll('.sublocation-checkbox').length && !document.querySelectorAll('.sublocation-checkbox:checked').length) {
+            setScopeError('sublocations', 'Please select at least one sub-location.');
+            hasErrors = true;
+        }
+
+        {% for category, questions in questions_by_category.items %}
+            {% for tq in questions %}
+                {% if tq.is_mandatory %}
+                    {% if tq.question.question_type == 'YES_NO' %}
+                        if (!$('input[name="question_{{ tq.question.id }}"]:checked').length) {
+                            setFieldError('question_{{ tq.question.id }}', 'This answer is required.');
+                            hasErrors = true;
+                        }
+                    {% else %}
+                        if (!$('[name="question_{{ tq.question.id }}"]').val()) {
+                            setFieldError('question_{{ tq.question.id }}', 'This answer is required.');
+                            hasErrors = true;
+                        }
+                    {% endif %}
+                {% endif %}
+
+                {% if tq.question.is_remarks_mandatory %}
+                    if (!$('[name="remarks_{{ tq.question.id }}"]').val().trim()) {
+                        setFieldError('remarks_{{ tq.question.id }}', 'Remarks are required.');
+                        hasErrors = true;
+                    }
+                {% endif %}
+
+                {% if tq.question.is_photo_required %}
+                    var photoInput{{ tq.question.id }} = document.getElementById('photo_{{ tq.question.id }}');
+                    var photoPreview{{ tq.question.id }} = document.getElementById('preview_{{ tq.question.id }}');
+                    if (!photoInput{{ tq.question.id }}.files.length && photoPreview{{ tq.question.id }}.dataset.hasDraftPhoto !== '1') {
+                        $('#error_photo_{{ tq.question.id }}').text('Photo evidence is required.').show();
+                        hasErrors = true;
+                    }
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+
+        if (hasErrors) {
             e.preventDefault();
-            alert('Please select at least one plant before submitting this inspection.');
+            var firstError = document.querySelector('.is-invalid, [data-question-group].border-danger, #plantsError:not(:empty), #zonesError:not(:empty), #locationsError:not(:empty), #sublocationsError:not(:empty)');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
             return false;
         }
     });
@@ -897,6 +1023,7 @@ $(document).on('change', '.inspection-photo-input', function() {
     const input = this;
     const id = input.id.replace('photo_', '');
     const previewId = `preview_${id}`;
+    $(`#error_photo_${id}`).text('').hide();
 
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -904,7 +1031,9 @@ $(document).on('change', '.inspection-photo-input', function() {
             $(`#${previewId}`).html(`
                 <img src="${e.target.result}" 
                      style="width:120px;height:120px;object-fit:cover;border-radius:6px;">
+                <small class="d-block text-muted mt-1">Ready to save with this draft.</small>
             `);
+            document.getElementById(previewId).dataset.hasDraftPhoto = '1';
         };
         reader.readAsDataURL(input.files[0]);
     }

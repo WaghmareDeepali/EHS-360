@@ -64,8 +64,8 @@
                 <div class="col-md-3 col-6 mb-3">
                     <div class="card text-center h-100 shadow-sm">
                         <div class="card-body">
-                            <h3 class="text-primary fw-bold">{{ total_questions }}</h3>
-                            <p class="mb-0 text-muted">Total Answered</p>
+                            <h3 class="text-primary fw-bold">{{ template_questions_count }}</h3>
+                            <p class="mb-0 text-muted">Total Questions</p>
                         </div>
                     </div>
                 </div>
@@ -90,6 +90,111 @@
                         <div class="card-body">
                             <h3 class="text-secondary fw-bold">{{ na_count }}</h3>
                             <p class="mb-0 text-muted">Not Applicable</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-info-circle text-primary"></i> Inspection Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Schedule Code</strong>
+                                    <div class="text-muted">{{ schedule.schedule_code }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Status</strong>
+                                    <div class="text-muted">{{ schedule.get_status_display }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Template</strong>
+                                    <div class="text-muted">{{ schedule.template.template_name }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Department</strong>
+                                    <div class="text-muted">{{ schedule.department.name|default:"-" }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Scheduled Date</strong>
+                                    <div class="text-muted">{{ schedule.scheduled_date|date:"d M Y" }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Due Date</strong>
+                                    <div class="text-muted">{{ schedule.due_date|date:"d M Y" }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Assigned To</strong>
+                                    <div class="text-muted">{{ schedule.assigned_to.get_full_name|default:schedule.assigned_to.username }}</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <strong>Submitted At</strong>
+                                    <div class="text-muted">{{ submission.submitted_at|date:"d M Y, h:i A" }}</div>
+                                </div>
+                            </div>
+                            {% if schedule.assignment_notes %}
+                                <div class="alert alert-light border mt-2 mb-0">
+                                    <strong>Assignment Notes:</strong> {{ schedule.assignment_notes }}
+                                </div>
+                            {% endif %}
+                            {% if submission.remarks %}
+                                <div class="alert alert-info mt-3 mb-0">
+                                    <strong>Overall Submission Remarks:</strong> {{ submission.remarks }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-map-marker-alt text-primary"></i> Inspection Scope</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <strong>Plants</strong>
+                                <div class="mt-2">
+                                    {% for plant in plants %}
+                                        <span class="badge bg-info text-dark me-1 mb-1">{{ plant.name }}</span>
+                                    {% empty %}
+                                        <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Zones</strong>
+                                <div class="mt-2">
+                                    {% for zone in zones %}
+                                        <span class="badge bg-light text-dark border me-1 mb-1">{{ zone.name }}</span>
+                                    {% empty %}
+                                        <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Locations</strong>
+                                <div class="mt-2">
+                                    {% for location in locations %}
+                                        <span class="badge bg-light text-dark border me-1 mb-1">{{ location.name }}</span>
+                                    {% empty %}
+                                        <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="mb-0">
+                                <strong>Sub-Locations</strong>
+                                <div class="mt-2">
+                                    {% for sublocation in sublocations %}
+                                        <span class="badge bg-light text-dark border me-1 mb-1">{{ sublocation.name }}</span>
+                                    {% empty %}
+                                        <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -123,10 +228,46 @@
                                                             <span class="badge bg-danger ms-2"><i class="fas fa-star"></i> Critical</span>
                                                         {% endif %}
                                                     </p>
+
+                                                    <div class="mb-2">
+                                                        <strong>Answer -</strong> {{ response.answer|default:"-" }}
+                                                    </div>
                                                     
                                                     {% if response.remarks %}
                                                         <div class="alert alert-light py-2 mb-2 border-start border-4 border-info">
                                                             <strong><i class="fas fa-comment-dots"></i> Remarks:</strong> {{ response.remarks }}
+                                                        </div>
+                                                    {% endif %}
+
+                                                    {% if response.specific_location %}
+                                                        <div class="small text-muted mb-2">
+                                                            <strong><i class="fas fa-map-pin"></i> Specific Location:</strong> {{ response.specific_location }}
+                                                        </div>
+                                                    {% endif %}
+
+                                                    <div class="small text-muted">
+                                                        <strong>Answered At:</strong> {{ response.answered_at|date:"d M Y, h:i A" }}
+                                                    </div>
+
+                                                    {% if response.answer == 'No' and response.assigned_to %}
+                                                        <div class="alert alert-warning py-2 mt-2 mb-2">
+                                                            <strong><i class="fas fa-user-check"></i> Assigned To:</strong> {{ response.assigned_to.get_full_name|default:response.assigned_to.username }}
+                                                            {% if response.assigned_at %}
+                                                                <br><strong>Assigned At:</strong> {{ response.assigned_at|date:"d M Y, h:i A" }}
+                                                            {% endif %}
+                                                            {% if response.assigned_by %}
+                                                                <br><strong>Assigned By:</strong> {{ response.assigned_by.get_full_name|default:response.assigned_by.username }}
+                                                            {% endif %}
+                                                            {% if response.assignment_remarks %}
+                                                                <br><strong>Assignment Remarks:</strong> {{ response.assignment_remarks }}
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endif %}
+
+                                                    {% if response.converted_to_hazard %}
+                                                        <div class="small text-danger mt-2">
+                                                            <strong><i class="fas fa-exclamation-triangle"></i> Converted to Hazard:</strong>
+                                                            {{ response.converted_to_hazard.report_number }}
                                                         </div>
                                                     {% endif %}
                                                     
@@ -136,12 +277,16 @@
                                                             Reference: {{ response.question.reference_standard }}
                                                         </small>
                                                     {% endif %}
+
+                                                    {% if response.question.guidance_notes %}
+                                                        <small class="text-muted d-block mt-1">
+                                                            <i class="fas fa-lightbulb"></i>
+                                                            Guidance: {{ response.question.guidance_notes }}
+                                                        </small>
+                                                    {% endif %}
                                                 </div>
                                                 
                                                 <div class="col-md-4 text-center text-md-end">
-                                                    <span class="badge bg-{% if response.answer == 'Yes' %}success{% elif response.answer == 'No' %}danger{% else %}secondary{% endif %} fs-6 mb-2">
-                                                        {{ response.get_answer_display }}
-                                                    </span>
 
                                                     {% if response.photo %}
                                                         <a href="{{ response.photo.url }}" target="_blank" title="Click to view full image">
@@ -202,7 +347,7 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                {{ finding.question.inspectionresponse_set.first.remarks|default:"-" }}
+                                                {{ finding.review_response.remarks|default:"-" }}
                                             </td>
                                         </tr>
                                     {% endfor %}

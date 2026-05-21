@@ -1382,48 +1382,7 @@ def inspection_start(request, schedule_id):
         schedule.started_at = timezone.now()
         schedule.save()
     
-    # Get all questions from template in order
-    template_questions = TemplateQuestion.objects.filter(
-        template=schedule.template
-    ).select_related(
-        'question',
-        'question__category'
-    ) #removed .order_by('display_order')
-    
-    # Group questions by category
-    from collections import defaultdict
-    questions_by_category = defaultdict(list)
-    
-    for tq in template_questions:
-        questions_by_category[tq.question.category].append(tq)
-    
-    # Sort by category display order
-    questions_by_category = dict(questions_by_category.items()) #removed - ,sorted(key=lambda x: x[0].display_order)
-
-    inspection_scope = _get_inspection_scope(schedule, request.user)
-    available_plants = inspection_scope['plants']
-    available_zones = inspection_scope['zones']
-    available_locations = inspection_scope['locations']
-    available_sublocations = inspection_scope['sublocations']
-
-    context = {
-        'schedule': schedule,
-        'questions_by_category': questions_by_category,
-        'total_questions': template_questions.count(),
-        'available_plants': available_plants,
-        'available_zones': available_zones,
-        'available_locations': available_locations,
-        'available_sublocations': available_sublocations,
-        'selected_plant_ids': [],
-        'selected_zone_ids': [],
-        'selected_location_ids': [],
-        'selected_sublocation_ids': [],
-        'allowed_plant_ids': list(available_plants.values_list('id', flat=True)),
-        'allowed_zone_ids': list(available_zones.values_list('id', flat=True)),
-        'allowed_location_ids': list(available_locations.values_list('id', flat=True)),
-        'allowed_sublocation_ids': list(available_sublocations.values_list('id', flat=True)),
-    }
-    
+    context = _build_inspection_form_context(schedule, request.user)
     return render(request, 'inspections/inspection_form.html', context)
 
 
@@ -1447,6 +1406,118 @@ def generate_finding_code(submission):
         new_num = 1
     
     return f"FIND-{date_str}-{new_num:04d}"
+
+
+def _get_selected_scope_ids(source_data, inspection_scope):
+    def _clean_ids(values, available_qs):
+        allowed_ids = set(available_qs.values_list('id', flat=True))
+        resolved = []
+        for raw_id in values or []:
+            try:
+                parsed_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed_id in allowed_ids and parsed_id not in resolved:
+                resolved.append(parsed_id)
+        return resolved
+
+    selected_plant_ids = _clean_ids(source_data.get('selected_plants', []), inspection_scope['plants'])
+    selected_zone_ids = _clean_ids(
+        source_data.get('selected_zones', []),
+        inspection_scope['zones'].filter(plant_id__in=selected_plant_ids).distinct()
+    )
+    selected_location_ids = _clean_ids(
+        source_data.get('selected_locations', []),
+        inspection_scope['locations'].filter(zone_id__in=selected_zone_ids).distinct()
+    )
+    selected_sublocation_ids = _clean_ids(
+        source_data.get('selected_sublocations', []),
+        inspection_scope['sublocations'].filter(location_id__in=selected_location_ids).distinct()
+    )
+
+    return {
+        'selected_plant_ids': selected_plant_ids,
+        'selected_zone_ids': selected_zone_ids,
+        'selected_location_ids': selected_location_ids,
+        'selected_sublocation_ids': selected_sublocation_ids,
+    }
+
+
+def _build_inspection_form_context(
+    schedule,
+    user,
+    *,
+    source_data=None,
+    field_errors=None,
+    scope_errors=None,
+    non_field_errors=None
+):
+    from collections import defaultdict
+
+    template_questions = TemplateQuestion.objects.filter(
+        template=schedule.template
+    ).select_related(
+        'question',
+        'question__category'
+    ) #removed .order_by('display_order')
+
+    inspection_scope = _get_inspection_scope(schedule, user)
+    available_plants = inspection_scope['plants']
+    available_zones = inspection_scope['zones']
+    available_locations = inspection_scope['locations']
+    available_sublocations = inspection_scope['sublocations']
+
+    draft = getattr(schedule, 'draft', None)
+    draft_data = draft.data if draft else {}
+    active_source = source_data if source_data is not None else draft_data
+    draft_photo_map = {}
+
+    if draft:
+        draft_photo_map = {
+            photo.question_id: photo
+            for photo in draft.photos.select_related('question').all()
+        }
+
+    selected_scope = _get_selected_scope_ids(active_source or {}, inspection_scope)
+    answers_by_question = (active_source or {}).get('answers', {})
+    remarks_by_question = (active_source or {}).get('remarks', {})
+
+    questions_by_category = defaultdict(list)
+    for tq in template_questions:
+        question_key = str(tq.question.id)
+        tq.prefill_answer = answers_by_question.get(question_key, '')
+        tq.prefill_remarks = remarks_by_question.get(question_key, '')
+        tq.answer_error = (field_errors or {}).get(f'question_{tq.question.id}', '')
+        tq.remarks_error = (field_errors or {}).get(f'remarks_{tq.question.id}', '')
+        tq.photo_error = (field_errors or {}).get(f'photo_{tq.question.id}', '')
+        tq.draft_photo = draft_photo_map.get(tq.question.id)
+        questions_by_category[tq.question.category].append(tq)
+
+    header_plants = available_plants if available_plants.exists() else schedule.plants.filter(is_active=True)
+
+    return {
+        'schedule': schedule,
+        'questions_by_category': dict(questions_by_category.items()),
+        'total_questions': template_questions.count(),
+        'available_plants': available_plants,
+        'available_zones': available_zones,
+        'available_locations': available_locations,
+        'available_sublocations': available_sublocations,
+        'header_plants': header_plants,
+        'selected_plant_ids': selected_scope['selected_plant_ids'],
+        'selected_zone_ids': selected_scope['selected_zone_ids'],
+        'selected_location_ids': selected_scope['selected_location_ids'],
+        'selected_sublocation_ids': selected_scope['selected_sublocation_ids'],
+        'allowed_plant_ids': list(available_plants.values_list('id', flat=True)),
+        'allowed_zone_ids': list(available_zones.values_list('id', flat=True)),
+        'allowed_location_ids': list(available_locations.values_list('id', flat=True)),
+        'allowed_sublocation_ids': list(available_sublocations.values_list('id', flat=True)),
+        'scope_errors': scope_errors or {},
+        'non_field_errors': non_field_errors or [],
+        'draft_exists': bool(draft),
+    }
+
+
 @login_required
 def inspection_submit(request, schedule_id):
     """HOD submits the CLOSED inspection"""
@@ -1467,78 +1538,133 @@ def inspection_submit(request, schedule_id):
     if request.method != 'POST':
         return redirect('inspections:inspection_start', schedule_id=schedule_id)
     try:
+        inspection_scope = _get_inspection_scope(schedule, request.user)
+        available_plants = inspection_scope['plants']
+        available_zones = inspection_scope['zones']
+        available_locations = inspection_scope['locations']
+        available_sublocations = inspection_scope['sublocations']
+
+        source_data = {
+            'selected_plants': request.POST.getlist('selected_plants'),
+            'selected_zones': request.POST.getlist('selected_zones'),
+            'selected_locations': request.POST.getlist('selected_locations'),
+            'selected_sublocations': request.POST.getlist('selected_sublocations'),
+            'answers': {},
+            'remarks': {},
+        }
+
+        template_questions = TemplateQuestion.objects.filter(
+            template=schedule.template
+        ).select_related('question')
+
+        for tq in template_questions:
+            question_id = str(tq.question.id)
+            source_data['answers'][question_id] = request.POST.get(f'question_{question_id}', '')
+            source_data['remarks'][question_id] = request.POST.get(f'remarks_{question_id}', '').strip()
+
+        selected_scope = _get_selected_scope_ids(source_data, inspection_scope)
+        selected_plant_ids = selected_scope['selected_plant_ids']
+        selected_zone_ids = selected_scope['selected_zone_ids']
+        selected_location_ids = selected_scope['selected_location_ids']
+        selected_sublocation_ids = selected_scope['selected_sublocation_ids']
+
+        action = request.POST.get('form_action', 'submit')
+
+        if action == 'draft':
+            draft, _ = InspectionDraft.objects.update_or_create(
+                schedule=schedule,
+                defaults={
+                    'saved_by': request.user,
+                    'data': {
+                        'selected_plants': selected_plant_ids,
+                        'selected_zones': selected_zone_ids,
+                        'selected_locations': selected_location_ids,
+                        'selected_sublocations': selected_sublocation_ids,
+                        'answers': source_data['answers'],
+                        'remarks': source_data['remarks'],
+                    }
+                }
+            )
+
+            for tq in template_questions:
+                photo = request.FILES.get(f'photo_{tq.question.id}')
+                if photo:
+                    InspectionDraftPhoto.objects.update_or_create(
+                        draft=draft,
+                        question=tq.question,
+                        defaults={'photo': photo}
+                    )
+
+            messages.success(request, f'Draft saved for inspection {schedule.schedule_code}.')
+            return redirect('inspections:inspection_start', schedule_id=schedule_id)
+
+        field_errors = {}
+        scope_errors = {}
+        non_field_errors = []
+
+        if available_plants.exists() and not selected_plant_ids:
+            scope_errors['selected_plants'] = 'Please select at least one plant.'
+        if available_zones.filter(plant_id__in=selected_plant_ids).exists() and not selected_zone_ids:
+            scope_errors['selected_zones'] = 'Please select at least one zone.'
+        if available_locations.filter(zone_id__in=selected_zone_ids).exists() and not selected_location_ids:
+            scope_errors['selected_locations'] = 'Please select at least one location.'
+        if available_sublocations.filter(location_id__in=selected_location_ids).exists() and not selected_sublocation_ids:
+            scope_errors['selected_sublocations'] = 'Please select at least one sub-location.'
+
+        draft = getattr(schedule, 'draft', None)
+        draft_photo_map = {}
+        if draft:
+            draft_photo_map = {
+                photo.question_id: photo
+                for photo in draft.photos.select_related('question').all()
+            }
+
+        for tq in template_questions:
+            question = tq.question
+            question_id = question.id
+            answer = source_data['answers'].get(str(question_id), '').strip()
+            remarks = source_data['remarks'].get(str(question_id), '').strip()
+            photo = request.FILES.get(f'photo_{question_id}')
+            draft_photo = draft_photo_map.get(question_id)
+
+            if tq.is_mandatory and not answer:
+                field_errors[f'question_{question_id}'] = 'This answer is required.'
+            if question.is_remarks_mandatory and not remarks:
+                field_errors[f'remarks_{question_id}'] = 'Remarks are required.'
+            if question.is_photo_required and not photo and not draft_photo:
+                field_errors[f'photo_{question_id}'] = 'Photo evidence is required.'
+
+        if scope_errors or field_errors:
+            non_field_errors.append('Please correct the highlighted fields and submit again.')
+            context = _build_inspection_form_context(
+                schedule,
+                request.user,
+                source_data=source_data,
+                field_errors=field_errors,
+                scope_errors=scope_errors,
+                non_field_errors=non_field_errors
+            )
+            return render(request, 'inspections/inspection_form.html', context)
+
         with transaction.atomic():
-            inspection_scope = _get_inspection_scope(schedule, request.user)
-            available_plants = inspection_scope['plants']
-            available_zones = inspection_scope['zones']
-            available_locations = inspection_scope['locations']
-            available_sublocations = inspection_scope['sublocations']
-
-            def _resolve_selected_ids(field_name, available_qs):
-                allowed_ids = list(available_qs.values_list('id', flat=True))
-                selected_ids = request.POST.getlist(field_name)
-                resolved_ids = []
-                for raw_id in selected_ids:
-                    try:
-                        parsed_id = int(raw_id)
-                    except (TypeError, ValueError):
-                        continue
-                    if parsed_id in allowed_ids and parsed_id not in resolved_ids:
-                        resolved_ids.append(parsed_id)
-                return resolved_ids
-
-            selected_plant_ids = _resolve_selected_ids('selected_plants', available_plants)
-            selected_zone_ids = _resolve_selected_ids(
-                'selected_zones',
-                available_zones.filter(plant_id__in=selected_plant_ids).distinct()
-            )
-            selected_location_ids = _resolve_selected_ids(
-                'selected_locations',
-                available_locations.filter(zone_id__in=selected_zone_ids).distinct()
-            )
-            selected_sublocation_ids = _resolve_selected_ids(
-                'selected_sublocations',
-                available_sublocations.filter(location_id__in=selected_location_ids).distinct()
-            )
-
-            if available_plants.exists() and not selected_plant_ids:
-                messages.error(request, 'Please select at least one plant for this inspection.')
-                return redirect('inspections:inspection_start', schedule_id=schedule_id)
-            if available_zones.filter(plant_id__in=selected_plant_ids).exists() and not selected_zone_ids:
-                messages.error(request, 'Please select at least one zone for this inspection.')
-                return redirect('inspections:inspection_start', schedule_id=schedule_id)
-            if available_locations.filter(zone_id__in=selected_zone_ids).exists() and not selected_location_ids:
-                messages.error(request, 'Please select at least one location for this inspection.')
-                return redirect('inspections:inspection_start', schedule_id=schedule_id)
-            if available_sublocations.filter(location_id__in=selected_location_ids).exists() and not selected_sublocation_ids:
-                messages.error(request, 'Please select at least one sub-location for this inspection.')
-                return redirect('inspections:inspection_start', schedule_id=schedule_id)
-
-            # Create submission 
             submission = InspectionSubmission.objects.create(
                 schedule=schedule,
                 submitted_by=request.user,
                 remarks=request.POST.get('overall_remarks', '').strip()
             )
-            template_questions = TemplateQuestion.objects.filter(
-                template=schedule.template
-            ).select_related('question')
             no_answers = []
-            missing_answers = []
             for tq in template_questions:
                 question = tq.question
-                field_name = f"question_{question.id}"
-                answer = request.POST.get(field_name)
-                remarks = request.POST.get(f"remarks_{question.id}", "").strip()
-                photo = request.FILES.get(f"photo_{question.id}")
-                
-                if tq.is_mandatory and not answer:
-                    missing_answers.append(question.question_text)
-                    continue
+                question_id = str(question.id)
+                answer = source_data['answers'].get(question_id, '').strip()
+                remarks = source_data['remarks'].get(question_id, '').strip()
+                uploaded_photo = request.FILES.get(f'photo_{question.id}')
+                draft_photo = draft_photo_map.get(question.id)
+                photo = uploaded_photo or (draft_photo.photo if draft_photo else None)
 
                 if not answer:
                     continue
-                # Save response
+
                 response = InspectionResponse.objects.create(
                     submission=submission,
                     question=question,
@@ -1546,10 +1672,8 @@ def inspection_submit(request, schedule_id):
                     remarks=remarks,
                     photo=photo
                 )
-                # Track
                 if answer == 'No':
-                    no_answers.append({'question': question,'response': response})
-                    # Auto finding 
+                    no_answers.append({'question': question, 'response': response})
                     if question.auto_generate_finding:
                         InspectionFinding.objects.create(
                             submission=submission,
@@ -1559,35 +1683,29 @@ def inspection_submit(request, schedule_id):
                             priority='HIGH' if question.is_critical else 'MEDIUM',
                             status='OPEN'
                         )
-            if missing_answers:
-                submission.delete()
-                messages.error(request,
-                    f"Please answer all mandatory questions: {', '.join(missing_answers[:3])}")
-                return redirect('inspections:inspection_start', schedule_id=schedule_id)
-            # Calculate compliance 
             submission.compliance_score = submission.calculate_compliance_score()
             submission.save()
-            if selected_plant_ids:
-                schedule.plants.set(Plant.objects.filter(id__in=selected_plant_ids, is_active=True))
-            if selected_zone_ids:
-                schedule.zones.set(Zone.objects.filter(id__in=selected_zone_ids, is_active=True))
-            if selected_location_ids:
-                schedule.locations.set(Location.objects.filter(id__in=selected_location_ids, is_active=True))
-            if selected_sublocation_ids:
-                schedule.sublocations.set(SubLocation.objects.filter(id__in=selected_sublocation_ids, is_active=True))
-            # Update schedule 
+            schedule.plants.set(Plant.objects.filter(id__in=selected_plant_ids, is_active=True))
+            schedule.zones.set(Zone.objects.filter(id__in=selected_zone_ids, is_active=True))
+            schedule.locations.set(Location.objects.filter(id__in=selected_location_ids, is_active=True))
+            schedule.sublocations.set(SubLocation.objects.filter(id__in=selected_sublocation_ids, is_active=True))
+
             schedule.status = 'LATE_CLOSE' if '[RESTARTED_FROM:' in (schedule.assignment_notes or '') else 'CLOSED'
             schedule.closed_at = timezone.now()
             schedule.save(update_fields=['status', 'closed_at'])
-            # Send notification 
+
+            InspectionDraft.objects.filter(schedule=schedule).delete()
+
             NotificationService.notify(
                 content_object=submission,
                 notification_type='INSPECTION_SUBMITTED',
                 module='INSPECTION'
             )
-            messages.success(request,f'Inspection {schedule.schedule_code} submitted successfully! '
-                f'Compliance Score: {submission.compliance_score}%')
-            return redirect('inspections:inspection_review',submission_id=submission.id)
+            messages.success(
+                request,
+                f'Inspection {schedule.schedule_code} submitted successfully! Compliance Score: {submission.compliance_score}%'
+            )
+            return redirect('inspections:inspection_review', submission_id=submission.id)
     except Exception as e:
         messages.error(request, f'Inspection submission failed: {str(e)}')
         return redirect('inspections:inspection_start', schedule_id=schedule_id)
@@ -1619,7 +1737,10 @@ def inspection_review(request, submission_id):
     # Pre-fetch related question and category data for efficiency.
     all_responses = submission.responses.select_related(
         'question',
-        'question__category'
+        'question__category',
+        'assigned_to',
+        'assigned_by',
+        'converted_to_hazard'
     ).order_by('question__category__category_name') # Order for consistent display
 
     # Group all responses by category for structured display in the template.
@@ -1637,20 +1758,38 @@ def inspection_review(request, submission_id):
     findings = InspectionFinding.objects.filter(
         submission=submission
     ).select_related('question', 'assigned_to')
+
+    template_questions_count = TemplateQuestion.objects.filter(
+        template=submission.schedule.template
+    ).count()
     
     # Get all responses for statistics (This was already correct)
     total_questions = all_responses.count()
     yes_count = all_responses.filter(answer='Yes').count()
     no_count = all_responses.filter(answer='No').count()
     na_count = all_responses.filter(answer='N/A').count()
+
+    finding_response_map = {
+        response.question_id: response
+        for response in all_responses
+    }
+
+    for finding in findings:
+        finding.review_response = finding_response_map.get(finding.question_id)
     
     context = {
         'submission': submission,
         'schedule': submission.schedule,
+        'plants': submission.schedule.plants.all().order_by('name'),
+        'zones': submission.schedule.zones.select_related('plant').all().order_by('plant__name', 'name'),
+        'locations': submission.schedule.locations.select_related('zone', 'zone__plant').all().order_by('zone__plant__name', 'zone__name', 'name'),
+        'sublocations': submission.schedule.sublocations.select_related('location', 'location__zone', 'location__zone__plant').all().order_by('location__zone__plant__name', 'location__zone__name', 'location__name', 'name'),
         # Pass the new dictionary with ALL responses to the template
         'responses_by_category': dict(responses_by_category),
         'findings': findings,
         'total_questions': total_questions,
+        'template_questions_count': template_questions_count,
+        'unanswered_count': max(template_questions_count - total_questions, 0),
         'yes_count': yes_count,
         'no_count': no_count,
         'na_count': na_count,

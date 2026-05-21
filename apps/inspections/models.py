@@ -697,6 +697,53 @@ class InspectionSubmission(models.Model):
         return round(score, 2)
 
 
+class InspectionDraft(models.Model):
+    """Stores in-progress inspection data before final submission."""
+
+    schedule = models.OneToOneField(
+        InspectionSchedule,
+        on_delete=models.CASCADE,
+        related_name='draft'
+    )
+    saved_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='inspection_drafts'
+    )
+    data = models.JSONField(default=dict, blank=True)
+    saved_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'inspection_drafts'
+
+    def __str__(self):
+        return f"Draft for {self.schedule.schedule_code}"
+
+
+class InspectionDraftPhoto(models.Model):
+    """Stores per-question photo uploads for inspection drafts."""
+
+    draft = models.ForeignKey(
+        InspectionDraft,
+        on_delete=models.CASCADE,
+        related_name='photos'
+    )
+    question = models.ForeignKey(
+        InspectionQuestion,
+        on_delete=models.CASCADE,
+        related_name='draft_photos'
+    )
+    photo = models.ImageField(upload_to='inspection_drafts/%Y/%m/')
+    uploaded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'inspection_draft_photos'
+        unique_together = ['draft', 'question']
+
+    def __str__(self):
+        return f"Draft photo for {self.draft.schedule.schedule_code} - {self.question.question_code}"
+
+
 class InspectionResponse(models.Model):
     submission = models.ForeignKey(
         'InspectionSubmission',
