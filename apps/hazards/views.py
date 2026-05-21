@@ -39,7 +39,7 @@ User = get_user_model()
 
 HAZARD_STATUS_FILTER_CHOICES = list(Hazard.STATUS_CHOICES) + [
     ('OVERDUE', 'Overdue'),
-    ('LATE_CLOSED', 'Late Closed'),
+    ('CLOSED_LATE', 'Closed Late'),
 ]
 
 
