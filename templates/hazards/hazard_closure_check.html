@@ -37,7 +37,7 @@
                         </div>
                         <div class="col-md-6">
                             <p><strong>Current Status:</strong> 
-                                <span class="badge {{ hazard.status_badge_class }}">{{ hazard.get_status_display }}</span>
+                                <span class="badge {{ hazard.status_badge_class }}">{{ hazard.effective_status_display }}</span>
                             </p>
                             <p><strong>Reported Date:</strong> {{ hazard.reported_date|date:"d M Y" }}</p>
                             <p><strong>Action Deadline:</strong> {{ hazard.action_deadline|date:"d M Y" }}</p>

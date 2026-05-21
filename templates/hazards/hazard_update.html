@@ -147,13 +147,8 @@
                         Edit Hazard Report: {{ hazard.report_number }}
                     </h3>
                     <p class="text-muted mb-0">
-                        <span class="badge 
-                            {% if hazard.status == 'CLOSED' %}badge-success
-                            {% elif hazard.status == 'REJECTED' %}badge-danger
-                            {% elif hazard.status == 'APPROVED' %}badge-primary
-                            {% elif hazard.status == 'PENDING' %}badge-warning
-                            {% else %}badge-secondary{% endif %}">
-                            {{ hazard.get_status_display }}
+                        <span class="badge {{ hazard.status_badge_class }}">
+                            {{ hazard.effective_status_display }}
                         </span>
                         <span class="badge 
                             {% if hazard.severity == 'critical' %}badge-danger

@@ -37,6 +37,33 @@ from apps.organizations.models import Plant, Zone, Location, SubLocation
 User = get_user_model()
 
 
+HAZARD_STATUS_FILTER_CHOICES = list(Hazard.STATUS_CHOICES) + [
+    ('OVERDUE', 'Overdue'),
+    ('LATE_CLOSED', 'Late Closed'),
+]
+
+
+def filter_hazards_by_status(queryset, selected_status):
+    """Apply computed hazard status filters without changing the model schema."""
+    if not selected_status:
+        return queryset
+
+    today = timezone.now().date()
+
+    if selected_status == 'open':
+        return queryset.exclude(status__in=['RESOLVED', 'CLOSED'])
+    if selected_status == 'OVERDUE':
+        return queryset.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED'])
+    if selected_status == 'LATE_CLOSED':
+        late_closed_ids = [
+            hazard.pk for hazard in queryset.prefetch_related('action_items')
+            if hazard.is_late_closed
+        ]
+        return queryset.filter(pk__in=late_closed_ids)
+
+    return queryset.filter(status=selected_status)
+
+
 class HazardDashboardView(LoginRequiredMixin, TemplateView):
     """Hazard Management Dashboard"""
     template_name = 'hazards/dashboard.html'
@@ -122,8 +149,7 @@ class HazardListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(hazard_type=hazard_type)
         if risk_level:
             queryset = queryset.filter(severity=risk_level)
-        if status:
-            queryset = queryset.filter(status=status)
+        queryset = filter_hazards_by_status(queryset, status)
         if assigned_by:
             queryset = queryset.filter(reported_by_id=assigned_by)
 
@@ -200,7 +226,7 @@ class HazardListView(LoginRequiredMixin, ListView):
         # Add choices for dropdown filters
         context['hazard_types'] = Hazard.HAZARD_TYPE_CHOICES
         context['risk_levels'] = Hazard.SEVERITY_CHOICES
-        context['status_choices'] = Hazard.STATUS_CHOICES
+        context['status_choices'] = HAZARD_STATUS_FILTER_CHOICES
 
         # Retain filter values in the form after submission
         context['search_query'] = self.request.GET.get('search', '')
@@ -1136,11 +1162,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         if selected_department: # <-- NEW
             filtered_hazards = filtered_hazards.filter(reported_by__department_id=selected_department)
             
-        if selected_status:
-            if selected_status == 'open':
-                filtered_hazards = filtered_hazards.exclude(status__in=['RESOLVED', 'CLOSED'])
-            else:
-                filtered_hazards = filtered_hazards.filter(status=selected_status)
+        filtered_hazards = filter_hazards_by_status(filtered_hazards, selected_status)
                 
         if selected_overdue == 'true':
             filtered_hazards = filtered_hazards.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED'])
@@ -1224,6 +1246,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         context['all_departments'] = Department.objects.filter(is_active=True).order_by('name') # <-- NEW
         context['all_categories'] = Hazard.HAZARD_CATEGORIES # <-- NEW
+        context['status_choices'] = HAZARD_STATUS_FILTER_CHOICES
 
         # Pass selected filter values and names back to the template
         context.update({
@@ -1243,6 +1266,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             if selected_sublocation: context['selected_sublocation_name'] = SubLocation.objects.get(id=selected_sublocation).name
             if selected_department: context['selected_department_name'] = Department.objects.get(id=selected_department).name # <-- NEW
             if selected_category: context['selected_category_name'] = dict(Hazard.HAZARD_CATEGORIES).get(selected_category) # <-- NEW
+            if selected_status: context['selected_status_label'] = dict(HAZARD_STATUS_FILTER_CHOICES).get(selected_status, selected_status.replace('_', ' ').title())
             if selected_month:
                 year, month = map(int, selected_month.split('-'))
                 context['selected_month_label'] = datetime.date(year, month, 1).strftime('%B %Y')
@@ -1256,6 +1280,8 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         hazards_qs = filtered_hazards.select_related(
             'plant', 'location', 'reported_by', 'reported_by__department'
+        ).prefetch_related(
+            'action_items'
         ).order_by('-incident_datetime')
 
         paginator = Paginator(hazards_qs, 10)  # 10 per page
@@ -1310,13 +1336,16 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['severity_data'] = json.dumps([severity_dict.get(val, 0) for val in severity_values])
 
         # Status Distribution ...
-        status_distribution = filtered_hazards.values('status').annotate(count=Count('id')).order_by('-count')
+        status_counts = {}
         status_labels, status_keys, status_data = [], [], []
-        status_choices_dict = dict(Hazard.STATUS_CHOICES)
-        for item in status_distribution:
-            status_labels.append(status_choices_dict.get(item['status'], item['status']))
-            status_keys.append(item['status'])
-            status_data.append(item['count'])
+        status_choices_dict = dict(HAZARD_STATUS_FILTER_CHOICES)
+        for hazard in filtered_hazards.prefetch_related('action_items'):
+            status_counts[hazard.effective_status] = status_counts.get(hazard.effective_status, 0) + 1
+
+        for status_key, count in sorted(status_counts.items(), key=lambda item: item[1], reverse=True):
+            status_labels.append(status_choices_dict.get(status_key, status_key.replace('_', ' ').title()))
+            status_keys.append(status_key)
+            status_data.append(count)
         context['status_labels'] = json.dumps(status_labels)
         context['status_keys'] = json.dumps(status_keys)
         context['status_data'] = json.dumps(status_data)
@@ -1464,10 +1493,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
             queryset = queryset.filter(hazard_category=selected_category)
         if selected_department:
             queryset = queryset.filter(reported_by__department_id=selected_department)
-        if selected_status == 'open':
-            queryset = queryset.exclude(status__in=['RESOLVED', 'CLOSED'])
-        elif selected_status:
-            queryset = queryset.filter(status=selected_status)
+        queryset = filter_hazards_by_status(queryset, selected_status)
         if selected_overdue == 'true':
             queryset = queryset.filter(action_deadline__lt=datetime.date.today()).exclude(status__in=['RESOLVED', 'CLOSED'])
         if selected_closed == 'true':
@@ -1533,7 +1559,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
                 hazard.get_hazard_type_display() if hazard.hazard_type else '',
                 hazard.get_hazard_category_display() if hazard.hazard_category else '',
                 hazard.get_severity_display() if hazard.severity else '',
-                hazard.get_status_display() if hazard.status else '',
+                hazard.effective_status_display if hazard.status else '',
                 hazard.incident_datetime.strftime('%Y-%m-%d %H:%M') if hazard.incident_datetime else '',
                 reported_by_display,
                 hazard.created_at.strftime('%Y-%m-%d') if hazard.created_at else '',
