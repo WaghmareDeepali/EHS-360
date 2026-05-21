@@ -1525,7 +1525,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
         # --- Headers ---
         headers = [
             'Report Number', 'Title', 'Type', 'Category', 'Severity', 'Status',
-            'Incident Datetime', 'Reported By / Department', 'Reported Date', 'Plant', 'Zone',
+            'Incident Datetime', 'Reported By', 'Department', 'Reported Date', 'Plant', 'Zone',
             'Location', 'Sub-Location', 'Description', 'Action Deadline'
         ]
         sheet.append(headers)
@@ -1543,15 +1543,9 @@ class ExportHazardsView(LoginRequiredMixin, View):
             if reporter and not reporter_name:
                 reporter_name = reporter.username or reporter.email or 'N/A'
 
-            reporter_department = getattr(getattr(reporter, 'department', None), 'name', '')
-            if reporter_name and reporter_department:
-                reported_by_display = f"{reporter_name} ({reporter_department})"
-            elif reporter_name:
-                reported_by_display = reporter_name
-            elif reporter_department:
-                reported_by_display = reporter_department
-            else:
-                reported_by_display = 'N/A'
+            reporter_department = getattr(getattr(reporter, 'department', None), 'name', 'N/A')
+            reported_by_display = reporter_name if reporter_name else 'N/A'
+            department_display = reporter_department if reporter_department else 'N/A'
 
             row_data = [
                 hazard.report_number or '',
@@ -1562,6 +1556,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
                 hazard.effective_status_display if hazard.status else '',
                 hazard.incident_datetime.strftime('%Y-%m-%d %H:%M') if hazard.incident_datetime else '',
                 reported_by_display,
+                department_display,
                 hazard.created_at.strftime('%Y-%m-%d') if hazard.created_at else '',
                 hazard.plant.name if hazard.plant else 'N/A',
                 hazard.zone.name if hazard.zone else 'N/A',
