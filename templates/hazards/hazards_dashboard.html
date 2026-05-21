@@ -141,6 +141,114 @@
         font-size: .82rem;
         color: #6b7280;
     }
+    .tracker-panel {
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        overflow: hidden;
+    }
+    .tracker-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid #e5e7eb;
+        background: rgba(255,255,255,.92);
+    }
+    .tracker-panel-header .tracker-filter-note {
+        display: block;
+        margin-top: 4px;
+        font-size: .9rem;
+        color: #4b5563;
+    }
+    .tracker-panel-header h5 {
+        margin: 0;
+        color: #1f2937;
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+    .chart-mode-toggle {
+        display: inline-flex;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+    .chart-mode-toggle .mode-btn {
+        min-width: 120px;
+        padding: 9px 18px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background: #fff;
+        color: #374151;
+        font-size: .95rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .chart-mode-toggle .mode-btn.active {
+        background: #4e73df;
+        border-color: #4e73df;
+        color: #fff;
+        box-shadow: 0 8px 16px rgba(78, 115, 223, 0.18);
+    }
+    .tracker-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 18px 18px 8px;
+    }
+    .tracker-scroll::-webkit-scrollbar {
+        height: 10px;
+    }
+    .tracker-scroll::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 999px;
+    }
+    .chart-wrap {
+        min-width: 100%;
+        height: 420px;
+    }
+    .chart-wrap canvas {
+        height: 100% !important;
+    }
+    .tracker-status-table {
+        width: 100%;
+        margin: 18px;
+        width: calc(100% - 36px);
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #fff;
+        color: #343a40;
+    }
+    .tracker-status-table th,
+    .tracker-status-table td {
+        padding: 14px 18px;
+        border-bottom: 1px solid #edf2f7;
+        text-align: center;
+        font-size: 1rem;
+    }
+    .tracker-status-table th {
+        background: #f8fafc;
+        color: #495057;
+        font-weight: 800;
+    }
+    .tracker-status-table td:first-child,
+    .tracker-status-table th:first-child {
+        text-align: left;
+        font-weight: 800;
+    }
+    .tracker-status-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+    .status-closed { color: #13855c; }
+    .status-pending { color: #dda20a; }
+    .status-progress { color: #117a8b; }
+    .status-cancelled { color: #6c757d; }
+    .status-overdue { color: #bd2130; }
+    .status-late { color: #6f42c1; }
+    .status-total { color: #343a40; font-weight: 800; }
+    .status-percent { color: #13855c; }
     @media (max-width: 991.98px) {
         .dept-summary-grid {
             grid-template-columns: 1fr;
@@ -148,6 +256,22 @@
         .dept-tracker-panel-header {
             flex-direction: column;
             align-items: flex-start;
+        }
+        .tracker-panel-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .chart-mode-toggle {
+            width: 100%;
+        }
+        .chart-mode-toggle .mode-btn {
+            flex: 1;
+            min-width: 0;
+        }
+        .tracker-status-table th,
+        .tracker-status-table td {
+            padding: 10px 12px;
+            font-size: .9rem;
         }
     }
 </style>
@@ -493,18 +617,59 @@
     <div class="col-12">
         <div class="dashboard-card">
             <div class="card-body">
-
-                <div class="section-header">
-                    <h5>
-                        <i class="fas fa-industry mr-2"></i>
-                        Plant Wise Monthly Hazard Trend
-                    </h5>
-                </div>
-
-                <div class="chart-container" style="height:420px;">
-                    <canvas id="plantMonthlyTrendChart"></canvas>
-                </div>
-
+                {% if plant_chart_data %}
+                    <div class="tracker-panel">
+                        <div class="tracker-panel-header">
+                            <div>
+                                <h5>Plant wise hazard status</h5>
+                            </div>
+                            <div class="chart-mode-toggle" aria-label="Chart display mode">
+                                <button type="button" class="mode-btn active" data-chart-mode="stacked">Stacked</button>
+                                <button type="button" class="mode-btn" data-chart-mode="grouped">Grouped</button>
+                            </div>
+                        </div>
+                        <div class="tracker-scroll">
+                            <div class="chart-wrap" id="plantChartStage">
+                                <canvas id="plantHazardStatusChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="tracker-status-table">
+                                <thead>
+                                    <tr>
+                                        <th>Plant</th>
+                                        <th class="status-closed">Closed</th>
+                                        <th class="status-pending">Pending</th>
+                                        <th class="status-progress">In Progress</th>
+                                        <th class="status-cancelled">Cancelled</th>
+                                        <th class="status-overdue">Overdue</th>
+                                        <th class="status-late">Close Late</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in plant_status_rows %}
+                                    <tr>
+                                        <td>{{ row.plant_name }}</td>
+                                        <td class="status-closed">{{ row.closed_count }}</td>
+                                        <td class="status-pending">{{ row.pending_count }}</td>
+                                        <td class="status-progress">{{ row.in_progress_count }}</td>
+                                        <td class="status-cancelled">{{ row.cancelled_count }}</td>
+                                        <td class="status-overdue">{{ row.overdue_count }}</td>
+                                        <td class="status-late">{{ row.late_close_count }}</td>
+                                        <td class="status-total">{{ row.total }} <span class="status-percent">({{ row.closed_percent }}%)</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                        No plant-wise hazard data is available for the selected filters.
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -901,61 +1066,182 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // =====================================
-    // Plant Wise Monthly Trend
-    // =====================================
+    // Plant Wise Hazard Status Tracker
+    const plantHazardStatusCtx = document.getElementById('plantHazardStatusChart');
+    if (plantHazardStatusCtx) {
+        const plantLabels = {{ plant_chart_labels|safe }};
+        const plantIds = {{ plant_chart_ids|safe }};
+        const plantChartStage = document.getElementById('plantChartStage');
+        const chartModeButtons = Array.from(document.querySelectorAll('[data-chart-mode]'));
+        const chartColors = {
+            closed: '#1cc88a',
+            pending: '#f6c23e',
+            progress: '#36b9cc',
+            cancelled: '#858796',
+            overdue: '#e74a3b',
+            late: '#6f42c1'
+        };
+        let plantStatusChart;
 
-    const plantMonthlyTrendCtx =
-        document.getElementById('plantMonthlyTrendChart');
+        function resizePlantChart(mode) {
+            if (!plantChartStage) {
+                return;
+            }
+            const rowHeight = mode === 'grouped' ? 86 : 58;
+            plantChartStage.style.width = '100%';
+            plantChartStage.style.height = `${Math.max(460, plantLabels.length * rowHeight + 120)}px`;
+        }
 
-    if (plantMonthlyTrendCtx) {
+        function setChartMode(mode) {
+            const isStacked = mode === 'stacked';
+            plantStatusChart.options.scales.x.stacked = isStacked;
+            plantStatusChart.options.scales.y.stacked = isStacked;
+            plantStatusChart.data.datasets.forEach((dataset) => {
+                dataset.barPercentage = isStacked ? 0.72 : 0.95;
+                dataset.categoryPercentage = isStacked ? 0.58 : 0.82;
+            });
+            chartModeButtons.forEach((button) => {
+                button.classList.toggle('active', button.dataset.chartMode === mode);
+            });
+            resizePlantChart(mode);
+            plantStatusChart.update();
+        }
 
-        new Chart(
-            plantMonthlyTrendCtx.getContext('2d'),
-            {
-
-                type: 'line',
-
-                data: {
-
-                    labels: {{ plant_month_labels|safe }},
-
-                    datasets: {{ plant_monthly_datasets|safe }}
-                },
-
-                options: {
-
-                    responsive: true,
-                    maintainAspectRatio: false,
-
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
-
-                    plugins: {
-
-                        legend: {
-                            position: 'bottom'
-                        },
-
-                        tooltip: {
-                            enabled: true
+        resizePlantChart('stacked');
+        plantStatusChart = new Chart(plantHazardStatusCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: plantLabels,
+                datasets: [{
+                    label: 'Closed',
+                    data: {{ plant_closed_data|safe }},
+                    backgroundColor: chartColors.closed,
+                    borderColor: chartColors.closed,
+                    borderWidth: 0,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.58
+                }, {
+                    label: 'Pending',
+                    data: {{ plant_pending_data|safe }},
+                    backgroundColor: chartColors.pending,
+                    borderColor: chartColors.pending,
+                    borderWidth: 0,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.58
+                }, {
+                    label: 'In progress',
+                    data: {{ plant_in_progress_data|safe }},
+                    backgroundColor: chartColors.progress,
+                    borderColor: chartColors.progress,
+                    borderWidth: 0,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.58
+                }, {
+                    label: 'Cancelled',
+                    data: {{ plant_cancelled_data|safe }},
+                    backgroundColor: chartColors.cancelled,
+                    borderColor: chartColors.cancelled,
+                    borderWidth: 0,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.58
+                }, {
+                    label: 'Overdue',
+                    data: {{ plant_overdue_data|safe }},
+                    backgroundColor: chartColors.overdue,
+                    borderColor: chartColors.overdue,
+                    borderWidth: 0,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.58
+                }, {
+                    label: 'Close late',
+                    data: {{ plant_late_close_data|safe }},
+                    backgroundColor: chartColors.late,
+                    borderColor: chartColors.late,
+                    borderWidth: 0,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.58
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'start',
+                        labels: {
+                            color: '#4b5563',
+                            boxWidth: 14,
+                            padding: 22,
+                            font: {
+                                size: 14
+                            }
                         }
                     },
-
-                    scales: {
-
-                        y: {
+                    tooltip: {
+                        mode: 'nearest',
+                        intersect: true,
+                        backgroundColor: '#1f2937',
+                        titleColor: '#fff',
+                        bodyColor: '#f5f5f5',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1
+                    },
+                    datalabels: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.22)',
+                            zeroLineColor: 'rgba(75, 85, 99, 0.28)'
+                        },
+                        ticks: {
                             beginAtZero: true,
-                            ticks: {
-                                precision: 0
+                            precision: 0,
+                            color: '#6b7280',
+                            font: {
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#4b5563',
+                            font: {
+                                weight: 'bold',
+                                size: 13
                             }
                         }
                     }
+                },
+                onClick: (e, elements) => {
+                    if (elements.length > 0) {
+                        const clickedPlantId = plantIds[elements[0].index];
+                        if (!clickedPlantId) {
+                            return;
+                        }
+                        const currentParams = new URLSearchParams(window.location.search);
+                        currentParams.set('plant', clickedPlantId);
+                        window.location.href = window.location.pathname + '?' + currentParams.toString();
+                    }
                 }
             }
-        );
+        });
+
+        chartModeButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                setChartMode(button.dataset.chartMode);
+            });
+        });
     }
 
 }); // DOMContentLoaded listener ends here.
