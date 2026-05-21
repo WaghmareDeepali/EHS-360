@@ -79,6 +79,7 @@
     }
     .metric-total { background: #e8f1ff; color: #0d6efd; }
     .metric-open { background: #fff4db; color: #b7791f; }
+    .metric-closed { background: #e8f5e9; color: #28a745; }
     .metric-overdue { background: #fde8e8; color: #dc3545; }
     .reported-meta strong {
         display: block;
@@ -467,6 +468,7 @@
                             <div class="d-flex align-items-center flex-wrap">
                                 <span class="metric-pill metric-total mr-2 mb-1">Total</span>
                                 <span class="metric-pill metric-open mr-2 mb-1">Open</span>
+                                <span class="metric-pill metric-closed mb-1">Closed</span>
                                 <span class="metric-pill metric-overdue mb-1">Overdue</span>
                             </div>
                         </div>
@@ -482,6 +484,27 @@
                         No department-specific hazard data is available for the selected filters.
                     </div>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-body">
+
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-industry mr-2"></i>
+                        Plant Wise Monthly Hazard Trend
+                    </h5>
+                </div>
+
+                <div class="chart-container" style="height:420px;">
+                    <canvas id="plantMonthlyTrendChart"></canvas>
+                </div>
+
             </div>
         </div>
     </div>
@@ -807,6 +830,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     barPercentage: 0.72,
                     categoryPercentage: 0.62
                 }, {
+                    label: 'Closed',
+                    data: {{ department_closed_data|safe }},
+                    backgroundColor: '#28a745',
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.62
+                }, {
                     label: 'Overdue',
                     data: {{ department_overdue_data|safe }},
                     backgroundColor: '#dc3545',
@@ -870,6 +899,63 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             plugins: [ChartDataLabels]
         });
+    }
+
+    // =====================================
+    // Plant Wise Monthly Trend
+    // =====================================
+
+    const plantMonthlyTrendCtx =
+        document.getElementById('plantMonthlyTrendChart');
+
+    if (plantMonthlyTrendCtx) {
+
+        new Chart(
+            plantMonthlyTrendCtx.getContext('2d'),
+            {
+
+                type: 'line',
+
+                data: {
+
+                    labels: {{ plant_month_labels|safe }},
+
+                    datasets: {{ plant_monthly_datasets|safe }}
+                },
+
+                options: {
+
+                    responsive: true,
+                    maintainAspectRatio: false,
+
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+
+                    plugins: {
+
+                        legend: {
+                            position: 'bottom'
+                        },
+
+                        tooltip: {
+                            enabled: true
+                        }
+                    },
+
+                    scales: {
+
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            }
+        );
     }
 
 }); // DOMContentLoaded listener ends here.

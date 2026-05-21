@@ -31,8 +31,8 @@ from apps.notifications.services import NotificationService
 
 # Make sure all models are imported
 from apps.organizations.models import Plant, Zone, Location, SubLocation
-
-
+from dateutil.relativedelta import relativedelta
+import colorsys
 
 User = get_user_model()
 
@@ -1378,6 +1378,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         department_labels = [item['name'] for item in department_distribution]
         department_total_data = [item['total'] for item in department_distribution]
         department_open_data = [item['open_count'] for item in department_distribution]
+        department_closed_data = [item['closed_count'] for item in department_distribution]
         department_overdue_data = [item['overdue_count'] for item in department_distribution]
 
         top_department = department_distribution[0] if department_distribution else None
@@ -1386,6 +1387,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['department_labels'] = json.dumps(department_labels)
         context['department_total_data'] = json.dumps(department_total_data)
         context['department_open_data'] = json.dumps(department_open_data)
+        context['department_closed_data'] = json.dumps(department_closed_data)
         context['department_overdue_data'] = json.dumps(department_overdue_data)
         context['department_chart_data'] = bool(department_distribution)
         context['department_breakdown'] = department_distribution[:6]
@@ -1395,6 +1397,144 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             'top_department_total': top_department['total'] if top_department else 0,
             'top_department_open': top_department['open_count'] if top_department else 0,
         }
+
+        # =====================================
+        # Plant Wise FY Monthly Trend
+        # =====================================
+
+        fy_months = []
+
+        if today.month >= 4:
+
+            fy_start_year = today.year
+            fy_end_year = today.year + 1
+
+        else:
+
+            fy_start_year = today.year - 1
+            fy_end_year = today.year
+
+        fy_months = []
+
+        if today.month >= 4:
+
+            fy_start_year = today.year
+            fy_end_year = today.year + 1
+
+            start_month = 4
+            end_month = today.month
+
+        else:
+
+            fy_start_year = today.year - 1
+            fy_end_year = today.year
+
+            start_month = 4
+            end_month = today.month + 12
+
+        for i in range(start_month, end_month + 1):
+
+            actual_month = i if i <= 12 else i - 12
+
+            actual_year = (
+                fy_start_year
+                if i <= 12
+                else fy_end_year
+            )
+
+            fy_months.append({
+
+                'month': actual_month,
+
+                'year': actual_year,
+
+                'label': datetime.date(
+                    actual_year,
+                    actual_month,
+                    1
+                ).strftime('%b %Y')
+            })
+
+        plant_monthly_datasets = []
+
+        if selected_plant:
+            plants = Plant.objects.filter(
+                id=selected_plant,
+                is_active=True
+            )
+        else:
+            plants = Plant.objects.filter(
+                is_active=True
+            ).order_by('name')
+
+        total_plants = plants.count()
+
+        dynamic_colors = []
+
+        for i in range(total_plants):
+
+            hue = i / max(total_plants, 1)
+
+            rgb = colorsys.hsv_to_rgb(
+                hue,
+                0.7,
+                0.9
+            )
+
+            dynamic_colors.append(
+                '#{:02x}{:02x}{:02x}'.format(
+                    int(rgb[0] * 255),
+                    int(rgb[1] * 255),
+                    int(rgb[2] * 255)
+                )
+            )
+
+        for index, plant in enumerate(plants):
+
+            monthly_counts = []
+
+            for month_data in fy_months:
+
+                count = filtered_hazards.filter(
+                    plant=plant,
+                    incident_datetime__year=month_data['year'],
+                    incident_datetime__month=month_data['month']
+                ).count()
+
+                monthly_counts.append(count)
+
+            plant_monthly_datasets.append({
+
+                'label': plant.name,
+
+                'data': monthly_counts,
+
+                'borderColor':
+                    dynamic_colors[index],
+
+                'backgroundColor':
+                    dynamic_colors[index],
+
+                'tension': 0.4,
+
+                'fill': False,
+
+                'pointRadius': 4,
+
+                'pointHoverRadius': 7
+            })
+
+        context['plant_month_labels'] = json.dumps(
+            [m['label'] for m in fy_months]
+        )
+
+        context['plant_monthly_datasets'] = json.dumps(
+            plant_monthly_datasets
+        )
+
+        context['financial_year_label'] = (
+            f"FY {fy_start_year}-{str(fy_end_year)[-2:]}"
+        )
 
         return context
     
