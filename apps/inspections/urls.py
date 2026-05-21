@@ -37,6 +37,7 @@ urlpatterns = [
     path('schedules/create/', views.schedule_create, name='schedule_create'),
     path('schedules/<int:pk>/', views.schedule_detail, name='schedule_detail'),
     path('schedules/<int:pk>/edit/', views.schedule_edit, name='schedule_edit'),
+    path('schedules/<int:pk>/delete/', views.schedule_delete, name='schedule_delete'),
     path('schedules/<int:pk>/cancel/', views.schedule_cancel, name='schedule_cancel'),
     path('schedules/<int:pk>/send-reminder/', views.schedule_send_reminder, name='schedule_send_reminder'),
     path('schedules/<int:pk>/restart/', views.schedule_restart, name='schedule_restart'),

@@ -382,7 +382,7 @@ class Hazard(models.Model):
     def effective_status(self):
         """Computed status used in the UI without changing the stored model field."""
         if self.is_late_closed:
-            return 'LATE_CLOSED'
+            return 'CLOSED_LATE'
         if self.is_action_overdue:
             return 'OVERDUE'
         return self.status
@@ -392,7 +392,7 @@ class Hazard(models.Model):
         """Human-readable computed status label."""
         status_display_map = {
             'OVERDUE': 'Overdue',
-            'LATE_CLOSED': 'Late Closed',
+            'CLOSED_LATE': 'Closed Late',
         }
         return status_display_map.get(self.effective_status, self.get_status_display())
     
@@ -427,7 +427,7 @@ class Hazard(models.Model):
             'PENDING_APPROVAL': 'badge-light',
             'APPROVED': 'badge-primary',
             'OVERDUE': 'badge-danger',
-            'LATE_CLOSED': 'badge-danger',
+            'CLOSED_LATE': 'badge-danger',
         }
         return status_classes.get(self.effective_status, 'badge-secondary')
 

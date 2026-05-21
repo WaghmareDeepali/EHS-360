@@ -868,6 +868,9 @@ def schedule_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    querydict = request.GET.copy()
+    querydict.pop('page', None)
+
     from apps.organizations.models import Plant
     plants = Plant.objects.filter(is_active=True)
     
@@ -884,7 +887,8 @@ def schedule_list(request):
         'selected_status': status,
         'selected_plant': plant_id,
         'selected_hod': assigned_to_id,
-        'search': search
+        'search': search,
+        'querystring': querydict.urlencode(),
     }
     return render(request, 'inspections/schedule_list.html', context)
 
@@ -1304,6 +1308,28 @@ def schedule_send_reminder(request, pk):
     
     messages.success(request, f'Reminder sent to {schedule.assigned_to.get_full_name()}!')
     return redirect('inspections:schedule_detail', pk=pk)
+
+
+@login_required
+def schedule_delete(request, pk):
+    """Delete an inspection schedule."""
+    schedule = get_object_or_404(InspectionSchedule, pk=pk)
+
+    if not (
+        request.user.is_superuser or
+        request.user.is_admin_user or
+        request.user.has_permission('DELETE_INSPECTION')
+    ):
+        messages.error(request, 'You are not authorized to delete this inspection.')
+        return redirect('inspections:schedule_list')
+
+    if request.method == 'POST':
+        schedule_code = schedule.schedule_code
+        schedule.delete()
+        messages.success(request, f'Inspection "{schedule_code}" deleted successfully.')
+        return redirect('inspections:schedule_list')
+
+    return redirect('inspections:schedule_list')
 
 
 @login_required
@@ -2695,7 +2721,7 @@ def schedule_clone(request, pk):
 
 @login_required
 def schedule_restart(request, pk):
-    """Restart an overdue inspection as a fresh schedule and close it as late close on submission."""
+    """Restart an overdue inspection as a fresh schedule and close it as close late on submission."""
     original_schedule = get_object_or_404(
         InspectionSchedule.objects.select_related('assigned_to', 'assigned_by').prefetch_related(
             'plants', 'zones', 'locations', 'sublocations', 'assigned_users'
@@ -2730,6 +2756,6 @@ def schedule_restart(request, pk):
 
     messages.success(
         request,
-        f'Inspection "{original_code}" restarted successfully as {restarted_schedule.schedule_code}. Submit it to close as Late Close.'
+        f'Inspection "{original_code}" restarted successfully as {restarted_schedule.schedule_code}. Submit it to close as Close Late.'
     )
     return redirect('inspections:schedule_detail', pk=restarted_schedule.pk)
