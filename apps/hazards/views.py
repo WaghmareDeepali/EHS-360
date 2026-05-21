@@ -1,10 +1,10 @@
 from urllib import request
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, CreateView, UpdateView, DetailView, TemplateView
+from django.views.generic import DeleteView, ListView, CreateView, UpdateView, DetailView, TemplateView
 from django.urls import reverse, reverse_lazy
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.db.models import Q, Value
 from django.http import JsonResponse
 from django.utils import timezone
@@ -172,6 +172,14 @@ class HazardListView(LoginRequiredMixin, ListView):
                 if email.strip()
             ]
             assigned_emails.extend(emails)
+
+        context['assigned_to_users'] = User.objects.filter(
+            email__in=assigned_emails,
+            is_active=True,
+            is_superuser=False,
+            is_active_employee=True
+        ).distinct().order_by('first_name', 'last_name')
+
         if selected_assigned_to:
             valid_user_exists = context['assigned_to_users'].filter(
                 id=selected_assigned_to
@@ -635,7 +643,25 @@ class HazardUpdateView(LoginRequiredMixin, UpdateView):
             print(f"  {field}: {errors}")
         return super().form_invalid(form)
 
+class HazardDeleteView(LoginRequiredMixin, View):
 
+    def get(self, request, pk):
+        hazard = get_object_or_404(Hazard, pk=pk)
+
+        return render(
+            request,
+            'hazards/hazard_confirm_delete.html',
+            {'hazard': hazard}
+        )
+
+    def post(self, request, pk):
+        hazard = get_object_or_404(Hazard, pk=pk)
+
+        hazard.delete()
+
+        messages.success(request, "Hazard deleted successfully.")
+
+        return redirect('hazards:hazard_list')
                  
 class HazardActionItemCreateView(LoginRequiredMixin, CreateView):
     """
