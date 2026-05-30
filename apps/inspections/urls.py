@@ -36,6 +36,7 @@ urlpatterns = [
     path('schedules/', views.schedule_list, name='schedule_list'),
     path('schedules/create/', views.schedule_create, name='schedule_create'),
     path('schedules/<int:pk>/', views.schedule_detail, name='schedule_detail'),
+    path('schedules/<int:pk>/pdf/', views.InspectionPDFDownloadView.as_view(), name='schedule_pdf'),
     path('schedules/<int:pk>/edit/', views.schedule_edit, name='schedule_edit'),
     path('schedules/<int:pk>/delete/', views.schedule_delete, name='schedule_delete'),
     path('schedules/<int:pk>/cancel/', views.schedule_cancel, name='schedule_cancel'),

@@ -10,6 +10,7 @@ from django.core.paginator import EmptyPage, Paginator
 from django.urls import reverse
 from django.utils import timezone
 from django.db import transaction
+from django.views import View
 from django.views.generic import TemplateView
 from django.db.models import Count, Avg
 
@@ -21,6 +22,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 
 from .models import *
 from .forms import *
+from .utils import generate_inspection_pdf
 from apps.notifications.services import NotificationService
 from apps.organizations.models import Plant, Zone, Location, SubLocation, Department
 
@@ -1198,6 +1200,36 @@ def schedule_detail(request, pk):
         ),
     }
     return render(request, 'inspections/schedule_detail.html', context)
+
+
+class InspectionPDFDownloadView(LoginRequiredMixin, View):
+    """Generate PDF report for an inspection schedule."""
+
+    def get(self, request, pk):
+        schedule = get_object_or_404(
+            InspectionSchedule.objects.select_related(
+                'template',
+                'assigned_to',
+                'assigned_by',
+                'department'
+            ).prefetch_related(
+                'plants', 'zones', 'locations', 'sublocations', 'assigned_users'
+            ),
+            pk=pk
+        )
+
+        if not (
+            request.user.is_superuser or
+            request.user.is_admin_user or
+            request.user.has_permission('EXPORT_INSPECTION_PDF') or
+            request.user.has_permission('VIEW_INSPECTION')
+        ):
+            messages.error(request, "You don't have permission to download this report")
+            return redirect('inspections:schedule_list')
+
+        return generate_inspection_pdf(schedule)
+
+
 @login_required
 def get_users_by_plants(request):
     """
