@@ -1045,113 +1045,145 @@ document.addEventListener('DOMContentLoaded', function() {
         plantSelect.dispatchEvent(new Event('change'));
     }
 
-    document.getElementById('uploadIncidentVideosBtn').addEventListener('click', function() {
-        if (isMobileOrTablet()) {
-            incidentVideoModal.style.display = 'block';
-        } else {
-            incidentVideoInput.click();
-        }
-    });
-
-    document.getElementById('recordIncidentVideoBtn').addEventListener('click', function() {
-        incidentVideoModal.style.display = 'none';
-        incidentVideoCameraInput.click();
-    });
-
-    document.getElementById('chooseIncidentVideoBtn').addEventListener('click', function() {
-        incidentVideoModal.style.display = 'none';
-        incidentVideoInput.click();
-    });
-
-    document.getElementById('cancelIncidentVideoBtn').addEventListener('click', function() {
-        incidentVideoModal.style.display = 'none';
-    });
-
-    incidentVideoInput.addEventListener('change', function() {
-        renderIncidentVideoPreview(this.files);
-    });
-
-    incidentVideoCameraInput.addEventListener('change', function() {
-        if (!this.files.length) {
-            return;
-        }
-
-        const dataTransfer = new DataTransfer();
-        Array.from(this.files).forEach(file => dataTransfer.items.add(file));
-        incidentVideoInput.files = dataTransfer.files;
-        renderIncidentVideoPreview(incidentVideoInput.files);
-    });
-
-    function renderIncidentVideoPreview(files) {
-        if (!files || !files.length) {
-            incidentVideoPreview.innerHTML = '';
-            return;
-        }
-
-        incidentVideoPreview.innerHTML = Array.from(files).map(file => `
-            <div class="mb-3">
-                <div class="small text-muted mb-1">${file.name}</div>
-                <video controls style="width: 100%; max-width: 320px; border-radius: 10px;">
-                    <source src="${URL.createObjectURL(file)}" type="${file.type}">
-                </video>
-            </div>
-        `).join('');
-    }
-
     function isMobileOrTablet() {
         return /Android|iPhone|iPad|iPod|Tablet/i.test(navigator.userAgent);
     }
 
-    document.getElementById('uploadIncidentPhotosBtn').addEventListener('click', function() {
-        if (isMobileOrTablet()) {
-            incidentPhotoModal.style.display = 'block';
-        } else {
+    const uploadIncidentVideosBtn = document.getElementById('uploadIncidentVideosBtn');
+    const recordIncidentVideoBtn = document.getElementById('recordIncidentVideoBtn');
+    const chooseIncidentVideoBtn = document.getElementById('chooseIncidentVideoBtn');
+    const cancelIncidentVideoBtn = document.getElementById('cancelIncidentVideoBtn');
+
+    if (
+        uploadIncidentVideosBtn &&
+        recordIncidentVideoBtn &&
+        chooseIncidentVideoBtn &&
+        cancelIncidentVideoBtn &&
+        incidentVideoInput &&
+        incidentVideoCameraInput &&
+        incidentVideoPreview &&
+        incidentVideoModal
+    ) {
+        uploadIncidentVideosBtn.addEventListener('click', function() {
+            if (isMobileOrTablet()) {
+                incidentVideoModal.style.display = 'block';
+            } else {
+                incidentVideoInput.click();
+            }
+        });
+
+        recordIncidentVideoBtn.addEventListener('click', function() {
+            incidentVideoModal.style.display = 'none';
+            incidentVideoCameraInput.click();
+        });
+
+        chooseIncidentVideoBtn.addEventListener('click', function() {
+            incidentVideoModal.style.display = 'none';
+            incidentVideoInput.click();
+        });
+
+        cancelIncidentVideoBtn.addEventListener('click', function() {
+            incidentVideoModal.style.display = 'none';
+        });
+
+        incidentVideoInput.addEventListener('change', function() {
+            renderIncidentVideoPreview(this.files);
+        });
+
+        incidentVideoCameraInput.addEventListener('change', function() {
+            if (!this.files.length) {
+                return;
+            }
+
+            const dataTransfer = new DataTransfer();
+            Array.from(this.files).forEach(file => dataTransfer.items.add(file));
+            incidentVideoInput.files = dataTransfer.files;
+            renderIncidentVideoPreview(incidentVideoInput.files);
+        });
+
+        function renderIncidentVideoPreview(files) {
+            if (!files || !files.length) {
+                incidentVideoPreview.innerHTML = '';
+                return;
+            }
+
+            incidentVideoPreview.innerHTML = Array.from(files).map(file => `
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">${file.name}</div>
+                    <video controls style="width: 100%; max-width: 320px; border-radius: 10px;">
+                        <source src="${URL.createObjectURL(file)}" type="${file.type}">
+                    </video>
+                </div>
+            `).join('');
+        }
+    }
+
+    const uploadIncidentPhotosBtn = document.getElementById('uploadIncidentPhotosBtn');
+    const captureIncidentPhotoBtn = document.getElementById('captureIncidentPhotoBtn');
+    const chooseIncidentPhotoBtn = document.getElementById('chooseIncidentPhotoBtn');
+    const cancelIncidentPhotoBtn = document.getElementById('cancelIncidentPhotoBtn');
+
+    if (
+        uploadIncidentPhotosBtn &&
+        captureIncidentPhotoBtn &&
+        chooseIncidentPhotoBtn &&
+        cancelIncidentPhotoBtn &&
+        incidentPhotoInput &&
+        incidentPhotoCameraInput &&
+        incidentPhotoPreview &&
+        incidentPhotoModal
+    ) {
+        uploadIncidentPhotosBtn.addEventListener('click', function() {
+            if (isMobileOrTablet()) {
+                incidentPhotoModal.style.display = 'block';
+            } else {
+                incidentPhotoInput.click();
+            }
+        });
+
+        captureIncidentPhotoBtn.addEventListener('click', function() {
+            incidentPhotoModal.style.display = 'none';
+            incidentPhotoCameraInput.click();
+        });
+
+        chooseIncidentPhotoBtn.addEventListener('click', function() {
+            incidentPhotoModal.style.display = 'none';
             incidentPhotoInput.click();
+        });
+
+        cancelIncidentPhotoBtn.addEventListener('click', function() {
+            incidentPhotoModal.style.display = 'none';
+        });
+
+        incidentPhotoInput.addEventListener('change', function() {
+            renderIncidentPhotoPreview(this.files);
+        });
+
+        incidentPhotoCameraInput.addEventListener('change', function() {
+            if (!this.files.length) {
+                return;
+            }
+
+            const dataTransfer = new DataTransfer();
+            Array.from(this.files).forEach(file => dataTransfer.items.add(file));
+            incidentPhotoInput.files = dataTransfer.files;
+            renderIncidentPhotoPreview(incidentPhotoInput.files);
+        });
+
+        function renderIncidentPhotoPreview(files) {
+            if (!files || !files.length) {
+                incidentPhotoPreview.innerHTML = '';
+                return;
+            }
+
+            incidentPhotoPreview.innerHTML = Array.from(files).map(file => `
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">${file.name}</div>
+                    <img src="${URL.createObjectURL(file)}"
+                         style="width:100%; max-width:220px; border-radius:10px; border:1px solid #ddd;">
+                </div>
+            `).join('');
         }
-    });
-
-    document.getElementById('captureIncidentPhotoBtn').addEventListener('click', function() {
-        incidentPhotoModal.style.display = 'none';
-        incidentPhotoCameraInput.click();
-    });
-
-    document.getElementById('chooseIncidentPhotoBtn').addEventListener('click', function() {
-        incidentPhotoModal.style.display = 'none';
-        incidentPhotoInput.click();
-    });
-
-    document.getElementById('cancelIncidentPhotoBtn').addEventListener('click', function() {
-        incidentPhotoModal.style.display = 'none';
-    });
-
-    incidentPhotoInput.addEventListener('change', function() {
-        renderIncidentPhotoPreview(this.files);
-    });
-
-    incidentPhotoCameraInput.addEventListener('change', function() {
-        if (!this.files.length) {
-            return;
-        }
-
-        const dataTransfer = new DataTransfer();
-        Array.from(this.files).forEach(file => dataTransfer.items.add(file));
-        incidentPhotoInput.files = dataTransfer.files;
-        renderIncidentPhotoPreview(incidentPhotoInput.files);
-    });
-
-    function renderIncidentPhotoPreview(files) {
-        if (!files || !files.length) {
-            incidentPhotoPreview.innerHTML = '';
-            return;
-        }
-
-        incidentPhotoPreview.innerHTML = Array.from(files).map(file => `
-            <div class="mb-3">
-                <div class="small text-muted mb-1">${file.name}</div>
-                <img src="${URL.createObjectURL(file)}"
-                     style="width:100%; max-width:220px; border-radius:10px; border:1px solid #ddd;">
-            </div>
-        `).join('');
     }
 });
 </script>
