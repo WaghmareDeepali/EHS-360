@@ -49,7 +49,6 @@ class Hazard(models.Model):
         # ('UNDER_REVIEW', 'Under Review'),
         ('ACTION_ASSIGNED', 'Action Assigned'),
         ('IN_PROGRESS', 'In Progress'),
-        ('RESOLVED', 'Resolved'),
         ('CLOSED', 'Closed'),
     ]
     
@@ -335,7 +334,7 @@ class Hazard(models.Model):
         all_completed = all(item.status == 'COMPLETED' for item in action_items)
         
         if all_completed:
-            self.status = 'RESOLVED'
+            self.status = 'CLOSED'
             self.save(update_fields=['status'])
         elif action_items.filter(status='IN_PROGRESS').exists():
             self.status = 'IN_PROGRESS'
@@ -370,7 +369,7 @@ class Hazard(models.Model):
     @property
     def is_action_overdue(self):
         """Check if action is overdue"""
-        if self.action_deadline and self.status not in ['RESOLVED', 'CLOSED']:
+        if self.action_deadline and self.status != 'CLOSED':
             return datetime.date.today() > self.action_deadline
         return False
 
@@ -388,14 +387,14 @@ class Hazard(models.Model):
         if latest_action_completion:
             return latest_action_completion
 
-        if self.status in ['RESOLVED', 'CLOSED']:
+        if self.status == 'CLOSED':
             return timezone.localtime(self.updated_at).date()
         return None
 
     @property
     def is_late_closed(self):
-        """True when the hazard was resolved/closed after the deadline date."""
-        if self.status not in ['RESOLVED', 'CLOSED'] or not self.action_deadline:
+        """True when the hazard was closed after the deadline date."""
+        if self.status != 'CLOSED' or not self.action_deadline:
             return False
 
         completed_or_closed_date = self.completed_or_closed_date
@@ -444,8 +443,7 @@ class Hazard(models.Model):
             'UNDER_REVIEW': 'badge-primary',
             'ACTION_ASSIGNED': 'badge-warning', # <-- Updated
             'IN_PROGRESS': 'badge-info',
-            'RESOLVED': 'badge-success',
-            'CLOSED': 'badge-secondary',
+            'CLOSED': 'badge-success',
             'REJECTED': 'badge-danger',
             'PENDING_APPROVAL': 'badge-light',
             'APPROVED': 'badge-primary',

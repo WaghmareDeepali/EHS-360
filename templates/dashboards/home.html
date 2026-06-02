@@ -55,6 +55,22 @@
     background: #e5e7eb;
     margin: 24px 0;
   }
+  .table-scroll {
+    max-height: 350px; /* adjust as needed */
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+
+  .table-scroll table {
+      margin-bottom: 0;
+  }
+
+  .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 2;
+  }
 </style>
 {% endblock %}
 
@@ -236,6 +252,7 @@
           Recent Injuries
         </div>
         <div class="section-body">
+          <div class="table-scroll">
           <table class="table table-hover incident-table">
             <thead>
               <tr>
@@ -243,6 +260,7 @@
                 <th>Type</th>
                 <th>Date</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -263,6 +281,13 @@
                   {{ incident.get_status_display }}
                   </span>
                 </td>
+                <td>
+                  <a href="{% url 'accidents:incident_detail' incident.pk %}" 
+                    class="btn btn-sm btn-info" 
+                    title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </a>
+                </td>
               </tr>
               {% empty %}
               <tr>
@@ -274,6 +299,7 @@
               {% endfor %}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
       <!-- Recent Hazards -->
@@ -283,6 +309,7 @@
           Recent Hazards
         </div>
         <div class="section-body">
+          <div class="table-scroll">
           <table class="table table-hover">
             <thead>
               <tr>
@@ -292,6 +319,7 @@
                 <th>Date</th>
                 <th>Risk Level</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -321,14 +349,16 @@
                   </span>
                 </td>
                 <td>
-                  <span class="badge 
-                    {% if hazard.status == 'CLOSED' or hazard.status == 'RESOLVED' %}badge-success
-                    {% elif hazard.status == 'REPORTED' %}badge-secondary
-                    {% elif hazard.status == 'IN_PROGRESS' %}badge-primary 
-                    {% else %}badge-dark{% endif %}">
-                    {{ hazard.get_status_display }}
+                  <span class="badge {{ hazard.status_badge_class }}">
+                    {{ hazard.effective_status_display }}
                   </span>
                 </td>
+                <td>
+                  <a href="{% url 'hazards:hazard_detail' hazard.pk %}" 
+                    class="btn btn-sm btn-info" 
+                    title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </a>
               </tr>
               {% empty %}
               <tr>
@@ -341,6 +371,7 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </div>

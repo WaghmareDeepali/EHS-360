@@ -414,7 +414,7 @@
                 <div class="stat-card success">
                     <i class="fas fa-check-circle stat-icon"></i>
                     <p class="stat-number">{{ closed_hazards_count }}</p>
-                    <p class="stat-label">RESOLVED Hazards</p>
+                    <p class="stat-label">Closed Hazards</p>
                 </div>
             </div>
         </a>
@@ -926,13 +926,13 @@ document.addEventListener('DOMContentLoaded', function() {
             scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
             onClick: (e, elements) => {
                 if (elements.length > 0) {
-                    // This array holds the actual status keys like 'REPORTED', 'RESOLVED', etc.
+                    // This array holds the actual status keys like 'REPORTED', 'CLOSED', etc.
                     const statusKeys = {{ status_keys|safe }};
                     // It finds the key corresponding to the bar you clicked.
                     const clickedStatusKey = statusKeys[elements[0].index];
                     
                     const currentParams = new URLSearchParams(window.location.search);
-                    // It correctly sets the URL parameter to the specific key (e.g., status=RESOLVED).
+                    // It correctly sets the URL parameter to the specific key (e.g., status=CLOSED).
                     currentParams.set('status', clickedStatusKey);
                     window.location.href = window.location.pathname + '?' + currentParams.toString();
                 }
