@@ -343,6 +343,29 @@ class Hazard(models.Model):
         elif action_items.filter(status='PENDING').exists() and self.status == 'REPORTED':
             self.status = 'ACTION_ASSIGNED'
             self.save(update_fields=['status'])      
+
+    def get_assigned_users(self):
+        """
+        Return all users assigned through hazard action items.
+        Falls back to the legacy `assigned_to` field when no action item
+        assignees exist yet.
+        """
+        assigned_users = []
+        seen_user_ids = set()
+
+        for action_item in self.action_items.all():
+            related_users = list(action_item.get_pending_users()) + list(action_item.completed_by_users.all())
+
+            for user in related_users:
+                if not user or user.pk in seen_user_ids:
+                    continue
+                assigned_users.append(user)
+                seen_user_ids.add(user.pk)
+
+        if not assigned_users and self.assigned_to:
+            assigned_users.append(self.assigned_to)
+
+        return assigned_users
         
     @property
     def is_action_overdue(self):
