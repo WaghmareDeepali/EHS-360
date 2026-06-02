@@ -129,25 +129,61 @@
         </div>
         <div class="card-body">
             <div class="row">
-                <div class="col-md-3">
-                    <strong><i class="fas fa-industry"></i> Plant:</strong><br>
+                <div class="col-md-6 mb-3">
+                    <strong><i class="fas fa-industry"></i> Plants:</strong><br>
+                    <div class="mt-1">
                         {% for plant in header_plants %}
-                            <span class="badge badge-info">{{ plant.name }}</span>
+                            <span class="badge badge-info mr-1 mb-1">{{ plant.name }}{% if plant.code %} ({{ plant.code }}){% endif %}</span>
                         {% empty %}
-                            -
+                            <span class="text-muted">No plants available</span>
                         {% endfor %}
+                    </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-6 mb-3">
+                    <strong><i class="fas fa-map-marker-alt"></i> Zones:</strong><br>
+                    <div class="mt-1">
+                        {% for zone in header_zones %}
+                            <span class="badge badge-secondary mr-1 mb-1">{{ zone.name }}{% if zone.code %} ({{ zone.code }}){% endif %}</span>
+                        {% empty %}
+                            <span class="text-muted">No zones available</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong><i class="fas fa-location-arrow"></i> Locations:</strong><br>
+                    <div class="mt-1">
+                        {% for location in header_locations %}
+                            <span class="badge badge-light mr-1 mb-1">{{ location.name }}{% if location.code %} ({{ location.code }}){% endif %}</span>
+                        {% empty %}
+                            <span class="text-muted">No locations available</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong><i class="fas fa-map-pin"></i> Sub-Locations:</strong><br>
+                    <div class="mt-1">
+                        {% for sublocation in header_sublocations %}
+                            <span class="badge badge-warning mr-1 mb-1">{{ sublocation.name }}{% if sublocation.code %} ({{ sublocation.code }}){% endif %}</span>
+                        {% empty %}
+                            <span class="text-muted">No sub-locations available</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <strong><i class="fas fa-user"></i> Assigned To:</strong><br>
+                    {{ schedule.assigned_to.get_full_name }}
+                </div>
+                <div class="col-md-3 mb-3">
                     <strong><i class="fas fa-calendar-alt"></i> Scheduled:</strong><br>
                     {{ schedule.scheduled_date|date:"d M Y" }}
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-3 mb-3">
                     <strong><i class="fas fa-clock"></i> Due Date:</strong><br>
                     <span class="text-danger">{{ schedule.due_date|date:"d M Y" }}</span>
                 </div>
-                <div class="col-md-3">
-                    <strong><i class="fas fa-user"></i> Assigned To:</strong><br>
-                    {{ schedule.assigned_to.get_full_name }}
+                <div class="col-md-3 mb-3">
+                    <strong><i class="fas fa-user-check"></i> Conducted By:</strong><br>
+                    {{ user.get_full_name }}
                 </div>
             </div>
             {% if schedule.assignment_notes %}

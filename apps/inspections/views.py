@@ -1537,6 +1537,14 @@ def _build_inspection_form_context(
         }
 
     selected_scope = _get_selected_scope_ids(active_source or {}, inspection_scope)
+    if not active_source:
+        selected_scope = {
+            'selected_plant_ids': list(available_plants.values_list('id', flat=True)),
+            'selected_zone_ids': list(available_zones.values_list('id', flat=True)),
+            'selected_location_ids': list(available_locations.values_list('id', flat=True)),
+            'selected_sublocation_ids': list(available_sublocations.values_list('id', flat=True)),
+        }
+
     answers_by_question = (active_source or {}).get('answers', {})
     remarks_by_question = (active_source or {}).get('remarks', {})
 
@@ -1551,7 +1559,10 @@ def _build_inspection_form_context(
         tq.draft_photo = draft_photo_map.get(tq.question.id)
         questions_by_category[tq.question.category].append(tq)
 
-    header_plants = available_plants if available_plants.exists() else schedule.plants.filter(is_active=True)
+    header_plants = available_plants
+    header_zones = available_zones
+    header_locations = available_locations
+    header_sublocations = available_sublocations
 
     return {
         'schedule': schedule,
@@ -1562,6 +1573,9 @@ def _build_inspection_form_context(
         'available_locations': available_locations,
         'available_sublocations': available_sublocations,
         'header_plants': header_plants,
+        'header_zones': header_zones,
+        'header_locations': header_locations,
+        'header_sublocations': header_sublocations,
         'selected_plant_ids': selected_scope['selected_plant_ids'],
         'selected_zone_ids': selected_scope['selected_zone_ids'],
         'selected_location_ids': selected_scope['selected_location_ids'],
