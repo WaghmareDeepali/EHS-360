@@ -1400,7 +1400,7 @@ def my_inspections(request):
         ).count(),
         'CLOSED': InspectionSchedule.objects.filter(
             assigned_to=request.user,
-            status__in=['CLOSED', 'LATE_CLOSE']
+            status__in=['CLOSED', 'CLOSE_LATE']
         ).count(),
         'overdue': InspectionSchedule.objects.filter(
             assigned_to=request.user,
@@ -1464,6 +1464,11 @@ def generate_finding_code(submission):
         new_num = 1
     
     return f"FIND-{date_str}-{new_num:04d}"
+
+
+def _get_inspection_completion_status(schedule):
+    """Return the final status for a submitted inspection."""
+    return 'CLOSE_LATE' if '[RESTARTED_FROM:' in (schedule.assignment_notes or '') else 'CLOSED'
 
 
 def _get_selected_scope_ids(source_data, inspection_scope):
@@ -1762,7 +1767,7 @@ def inspection_submit(request, schedule_id):
             schedule.locations.set(Location.objects.filter(id__in=selected_location_ids, is_active=True))
             schedule.sublocations.set(SubLocation.objects.filter(id__in=selected_sublocation_ids, is_active=True))
 
-            schedule.status = 'LATE_CLOSE' if '[RESTARTED_FROM:' in (schedule.assignment_notes or '') else 'CLOSED'
+            schedule.status = _get_inspection_completion_status(schedule)
             schedule.closed_at = timezone.now()
             schedule.save(update_fields=['status', 'closed_at'])
 
@@ -2800,7 +2805,7 @@ def schedule_clone(request, pk):
 
 @login_required
 def schedule_restart(request, pk):
-    """Restart an overdue inspection as a fresh schedule and close it as close late on submission."""
+    """Restart an overdue inspection on the same schedule record."""
     original_schedule = get_object_or_404(
         InspectionSchedule.objects.select_related('assigned_to', 'assigned_by').prefetch_related(
             'plants', 'zones', 'locations', 'sublocations', 'assigned_users'
@@ -2822,19 +2827,32 @@ def schedule_restart(request, pk):
 
     original_code = original_schedule.schedule_code
     original_notes = original_schedule.assignment_notes or ''
-    restarted_schedule = _clone_schedule_as_scheduled(
-        original_schedule,
-        assignment_notes=f"[RESTARTED_FROM:{original_code}]\n{original_notes}".strip()
+    restart_marker = f"[RESTARTED_FROM:{original_code}]"
+    restarted_notes = original_notes
+    if restart_marker not in original_notes:
+        restarted_notes = f"{restart_marker}\n{original_notes}".strip()
+
+    InspectionDraft.objects.filter(schedule=original_schedule).delete()
+
+    InspectionSchedule.objects.filter(pk=original_schedule.pk).update(
+        assignment_notes=restarted_notes,
+        status='IN_PROGRESS',
+        started_at=timezone.now(),
+        closed_at=None,
+        reminder_sent=False,
+        reminder_sent_at=None,
+        updated_at=timezone.now(),
     )
+    original_schedule.refresh_from_db()
 
     NotificationService.notify(
-        content_object=restarted_schedule,
+        content_object=original_schedule,
         notification_type='INSPECTION_SCHEDULE',
         module='INSPECTION'
     )
 
     messages.success(
         request,
-        f'Inspection "{original_code}" restarted successfully as {restarted_schedule.schedule_code}. Submit it to close as Close Late.'
+        f'Inspection "{original_code}" restarted successfully. Continue this same inspection and submit it to close as Close Late.'
     )
-    return redirect('inspections:schedule_detail', pk=restarted_schedule.pk)
+    return redirect('inspections:schedule_detail', schedule_id=original_schedule.pk)

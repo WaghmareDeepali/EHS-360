@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.inspections.models import InspectionSchedule, InspectionTemplate
+from apps.inspections.views import _get_inspection_completion_status
 from apps.notifications.services import NotificationService
 
 
@@ -41,7 +42,7 @@ class ScheduleRestartNotificationTests(TestCase):
         self.assertIn('Assigned By        : N/A', context['message'])
 
     @patch.object(NotificationService, 'send_email', return_value=True)
-    def test_restart_overdue_schedule_without_assigned_by_redirects(self, mock_send_email):
+    def test_restart_overdue_schedule_without_assigned_by_reuses_same_record(self, mock_send_email):
         self.client.force_login(self.assigned_to)
 
         response = self.client.get(
@@ -49,9 +50,17 @@ class ScheduleRestartNotificationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(mock_send_email.called)
-        self.assertTrue(
-            InspectionSchedule.objects.filter(
-                assignment_notes__startswith=f'[RESTARTED_FROM:{self.schedule.schedule_code}]'
-            ).exists()
+        self.assertEqual(InspectionSchedule.objects.count(), 1)
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.status, 'IN_PROGRESS')
+        self.assertIn(f'[RESTARTED_FROM:{self.schedule.schedule_code}]', self.schedule.assignment_notes)
+        self.assertEqual(
+            response.url,
+            reverse('inspections:inspection_start', args=[self.schedule.pk])
         )
+        self.assertTrue(mock_send_email.called)
+
+    def test_completion_helper_marks_restarted_inspections_as_late_close(self):
+        self.schedule.assignment_notes = f'[RESTARTED_FROM:{self.schedule.schedule_code}]'
+
+        self.assertEqual(_get_inspection_completion_status(self.schedule), 'LATE_CLOSE')
