@@ -31,6 +31,7 @@ class Hazard(models.Model):
         ('noise', 'Noise'),
         ('illumination', 'Illumination'),
         ('dust_collection_ventillation', 'Dust collection / Ventillation'),
+        ('legal_compliance', 'Legal Compliance'),
         ('others', 'Others'),
     ]
     

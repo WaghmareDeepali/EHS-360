@@ -1113,6 +1113,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         selected_status = self.request.GET.get('status', '')
         selected_overdue = self.request.GET.get('overdue', '')
         selected_closed = self.request.GET.get('closed', '')
+        selected_hazard_type = self.request.GET.get('hazard_type', '')
         selected_category = self.request.GET.get('category', '')    # <-- NEW
         selected_department = self.request.GET.get('department', '') # <-- NEW
 
@@ -1156,6 +1157,8 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             filtered_hazards = filtered_hazards.filter(sublocation_id=selected_sublocation)
         if selected_severity:
             filtered_hazards = filtered_hazards.filter(severity=selected_severity)
+        if selected_hazard_type:
+            filtered_hazards = filtered_hazards.filter(hazard_type=selected_hazard_type)
         if selected_category: # <-- NEW
             filtered_hazards = filtered_hazards.filter(hazard_category=selected_category)
         if selected_department: # <-- NEW
@@ -1246,6 +1249,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         } for i in range(12)]
 
         context['all_departments'] = Department.objects.filter(is_active=True).order_by('name') # <-- NEW
+        context['hazard_types'] = Hazard.HAZARD_TYPE_CHOICES
         context['all_categories'] = Hazard.HAZARD_CATEGORIES # <-- NEW
         context['status_choices'] = HAZARD_STATUS_FILTER_CHOICES
 
@@ -1255,6 +1259,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             'selected_location': selected_location, 'selected_sublocation': selected_sublocation,
             'selected_month': selected_month, 'selected_severity': selected_severity,
             'selected_status': selected_status,
+            'selected_hazard_type': selected_hazard_type,
             'selected_category': selected_category, # <-- NEW
             'selected_department': selected_department, # <-- NEW
             'selected_overdue': selected_overdue,
@@ -1266,6 +1271,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             if selected_location: context['selected_location_name'] = Location.objects.get(id=selected_location).name
             if selected_sublocation: context['selected_sublocation_name'] = SubLocation.objects.get(id=selected_sublocation).name
             if selected_department: context['selected_department_name'] = Department.objects.get(id=selected_department).name # <-- NEW
+            if selected_hazard_type:context['selected_hazard_type_name'] = dict(Hazard.HAZARD_TYPE_CHOICES).get(selected_hazard_type)
             if selected_category: context['selected_category_name'] = dict(Hazard.HAZARD_CATEGORIES).get(selected_category) # <-- NEW
             if selected_status: context['selected_status_label'] = dict(HAZARD_STATUS_FILTER_CHOICES).get(selected_status, selected_status.replace('_', ' ').title())
             if selected_month:
@@ -1520,6 +1526,75 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             'top_plant_total': top_plant['total'] if top_plant else 0,
             'top_plant_overdue': top_plant['overdue_count'] if top_plant else 0,
         }
+        # Hazard Type Chart Data
+        hazard_type_distribution = (
+            filtered_hazards
+            .values('hazard_type')
+            .annotate(count=Count('id'))
+        )
+
+        hazard_type_dict = {
+            item['hazard_type']: item['count']
+            for item in hazard_type_distribution
+        }
+
+        hazard_type_labels = []
+        hazard_type_counts = []
+        hazard_type_values = []
+
+        for value, label in Hazard.HAZARD_TYPE_CHOICES:
+            hazard_type_labels.append(label)
+            hazard_type_counts.append(hazard_type_dict.get(value, 0))
+            hazard_type_values.append(value)
+
+        context['hazard_type_labels'] = json.dumps(hazard_type_labels)
+        context['hazard_type_counts'] = json.dumps(hazard_type_counts)
+        context['hazard_type_values'] = json.dumps(hazard_type_values)
+
+
+        # =====================================
+        # Hazard Overdue By Department
+        # =====================================
+
+        overdue_department_map = {}
+
+        overdue_hazards = filtered_hazards.filter(
+            action_deadline__lt=today
+        ).exclude(
+            status='CLOSED'
+        )
+
+        for hazard in overdue_hazards:
+
+            assigned_users = hazard.get_assigned_users()
+
+            if assigned_users:
+
+                for assigned_user in assigned_users:
+
+                    dept = getattr(
+                        assigned_user,
+                        'department',
+                        None
+                    )
+
+                    if dept:
+
+                        overdue_department_map[dept.name] = (
+                            overdue_department_map.get(
+                                dept.name,
+                                0
+                            ) + 1
+                        )
+
+        context['overdue_department_labels'] = json.dumps(
+            list(overdue_department_map.keys())
+        )
+
+        context['overdue_department_counts'] = json.dumps(
+            list(overdue_department_map.values())
+        )
+
 
         return context
     

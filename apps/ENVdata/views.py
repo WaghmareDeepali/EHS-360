@@ -1145,6 +1145,31 @@ class GetCategoryUnitsAPIView(LoginRequiredMixin, View):
             }, status=500)
 
 
+# Sequence Change.
+class UpdateQuestionSequenceView(LoginRequiredMixin, View):
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+
+            question_ids = data.get("question_ids", [])
+
+            for index, question_id in enumerate(question_ids, start=1):
+                EnvironmentalQuestion.objects.filter(
+                    id=question_id
+                ).update(order=index)
+
+            return JsonResponse({
+                "success": True
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                "success": False,
+                "error": str(e)
+            })
+        
+
 # class GetSourceFieldsAPIView(LoginRequiredMixin, View):
 #     """
 #     API to get available fields and their choices for a source type

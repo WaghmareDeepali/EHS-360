@@ -15,6 +15,7 @@ urlpatterns = [
 
     # API endpoints
     path('api/get-category-units/', GetCategoryUnitsAPIView.as_view(), name='get-category-units'),
+    path('update-question-sequence/',UpdateQuestionSequenceView.as_view(),name='update-question-sequence'),
     path('api/get-source-fields/', GetSourceFieldsAPIView.as_view(), name='get-source-fields'),
     path('api/get-base-unit/', GetCategoryBaseUnitAPIView.as_view(), name='api-get-base-unit'),
     path('dashboard/', EnvironmentalDashboardView.as_view(), name='dashboard'),

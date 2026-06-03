@@ -340,6 +340,21 @@
                 </select>
             </div>
             <div class="col-md-3 mb-3">
+                <label for="hazard_type_filter" class="form-label small font-weight-bold">
+                    <i class="fas fa-exclamation-triangle mr-1"></i> Hazard Type
+                </label>
+                <select name="hazard_type" id="hazard_type_filter" class="form-control">
+                    <option value="">All Types</option>
+
+                    {% for type_key, type_name in hazard_types %}
+                    <option value="{{ type_key }}"
+                        {% if selected_hazard_type == type_key %}selected{% endif %}>
+                        {{ type_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-3">
                 <label for="category_filter" class="form-label small font-weight-bold"><i class="fas fa-tags mr-1"></i> Category</label>
                 <select name="category" id="category_filter" class="form-control">
                     <option value="">All Categories</option>
@@ -380,6 +395,7 @@
                 {% if selected_location_name %}<span class="active-filter-badge">Location: {{ selected_location_name }}<i class="fas fa-times" onclick="removeFilter('location')"></i></span>{% endif %}
                 {% if selected_sublocation_name %}<span class="active-filter-badge">Sub-Location: {{ selected_sublocation_name }}<i class="fas fa-times" onclick="removeFilter('sublocation')"></i></span>{% endif %}
                 {% if selected_department_name %}<span class="active-filter-badge">Assigned Dept: {{ selected_department_name }}<i class="fas fa-times" onclick="removeFilter('department')"></i></span>{% endif %}
+                {% if selected_hazard_type_name %}<span class="active-filter-badge">Hazard Type: {{ selected_hazard_type_name }}<i class="fas fa-times" onclick="removeFilter('hazard_type')"></i></span>{% endif %}
                 {% if selected_category_name %}<span class="active-filter-badge">Category: {{ selected_category_name }}<i class="fas fa-times" onclick="removeFilter('category')"></i></span>{% endif %}
                 {% if selected_month_label %}<span class="active-filter-badge">Month: {{ selected_month_label }}<i class="fas fa-times" onclick="removeFilter('month')"></i></span>{% endif %}
                 {% if selected_severity %}<span class="active-filter-badge">Risk: {{ selected_severity|capfirst }}<i class="fas fa-times" onclick="removeFilter('severity')"></i></span>{% endif %}
@@ -538,6 +554,41 @@
 </div> -->
 
 
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="dashboard-card">
+            <div class="card-body">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Hazard Types
+                    </h5>
+                </div>
+                <div class="chart-container">
+                    <canvas id="hazardTypeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="dashboard-card">
+            <div class="card-body">
+
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-clock mr-2"></i>
+                        Hazard Overdue by Department
+                    </h5>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="overdueDepartmentChart"></canvas>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
 <div class="row mb-4">
     <div class="col-12">
         <div class="dashboard-card">
@@ -941,6 +992,171 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         plugins: [ChartDataLabels] // Registering the plugin
     });
+
+    const hazardTypeCtx = document.getElementById('hazardTypeChart');
+    if(hazardTypeCtx){
+
+        const hazardTypeChart =
+        new Chart(
+            hazardTypeCtx.getContext('2d'),
+            {
+
+            type: 'bar',
+
+            data: {
+                labels: {{ hazard_type_labels|safe }},
+
+                datasets: [{
+                    label: 'Hazards',
+
+                    data: {{ hazard_type_counts|safe }},
+
+                    backgroundColor: [
+                        '#dc3545',
+                        '#ffc107',
+                        '#17a2b8',
+                        '#28a745',
+                        '#6f42c1'
+                    ],
+
+                    borderRadius: 10,
+                    barThickness: 35
+                }]
+            },
+
+            options: {
+
+                responsive: true,
+                maintainAspectRatio: false,
+
+                plugins: {
+
+                    legend: {
+                        display: false
+                    },
+
+                    datalabels: {
+                        anchor: 'center',
+                        align: 'center',
+                        color: '#fff',
+
+                        font: {
+                            weight: 'bold',
+                            size: 14
+                        }
+                    }
+                },
+
+                scales: {
+
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                },
+
+                onClick: (e, elements) => {
+
+                    if(elements.length > 0){
+
+                        const hazardTypeValues = {{ hazard_type_values|safe }};
+                        const hazardType =
+                            hazardTypeValues[elements[0].index];
+
+                        const currentParams =
+                            new URLSearchParams(
+                                window.location.search
+                            );
+
+                        currentParams.set(
+                            'hazard_type',
+                            hazardType
+                        );
+
+                        window.location.href =
+                            window.location.pathname +
+                            '?' +
+                            currentParams.toString();
+                    }
+                }
+            },
+
+            plugins: [ChartDataLabels]
+        });
+    }
+
+    const overdueDepartmentCtx = document.getElementById('overdueDepartmentChart');
+    if (overdueDepartmentCtx) {
+
+        new Chart(
+            overdueDepartmentCtx.getContext('2d'),
+            {
+
+                type: 'bar',
+
+                data: {
+
+                    labels:
+                        {{ overdue_department_labels|safe }},
+
+                    datasets: [{
+
+                        label: 'Overdue Hazards',
+
+                        data:
+                            {{ overdue_department_counts|safe }},
+
+                        backgroundColor: '#dc3545',
+
+                        borderRadius: 10,
+
+                        barThickness: 35
+                    }]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        },
+
+                        datalabels: {
+
+                            anchor: 'center',
+
+                            align: 'center',
+
+                            color: '#fff',
+
+                            font: {
+                                weight: 'bold',
+                                size: 14
+                            }
+                        }
+                    },
+
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                },
+
+                plugins: [ChartDataLabels]
+            }
+        );
+    }
 
     // Top Categories Pie Chart
     const topCategoriesCtx = document.getElementById('topCategoriesChart');
