@@ -96,7 +96,7 @@ class Command(BaseCommand):
 
             # Get dates
             scheduled_date, period_start, period_end, due_date = get_schedule_dates(
-                inspection_type, fake_now, config
+                inspection_type, fake_now
             )
             self.stdout.write(f"\nScheduled date : {scheduled_date}")
             self.stdout.write(f"Period         : {period_start} → {period_end}")
