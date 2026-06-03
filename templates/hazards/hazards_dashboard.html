@@ -142,6 +142,10 @@
         font-size: .82rem;
         color: #6b7280;
     }
+    .overdue-department-chart {
+        height: 360px;
+        padding: 22px 18px 18px;
+    }
     .tracker-panel {
         border: 1px solid #e5e7eb;
         border-radius: 14px;
@@ -581,7 +585,7 @@
                     </h5>
                 </div>
 
-                <div class="chart-container">
+                <div class="chart-container overdue-department-chart">
                     <canvas id="overdueDepartmentChart"></canvas>
                 </div>
 
@@ -1112,7 +1116,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         borderRadius: 10,
 
-                        barThickness: 35
+                        barPercentage: 0.55,
+                        categoryPercentage: 0.72,
+                        maxBarThickness: 26
                     }]
                 },
 
@@ -1121,6 +1127,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     responsive: true,
 
                     maintainAspectRatio: false,
+
+                    layout: {
+                        padding: {
+                            top: 12,
+                            right: 8,
+                            left: 8
+                        }
+                    },
 
                     plugins: {
 
@@ -1134,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             align: 'center',
 
-                            color: '#fff',
+                            color: '#111827',
 
                             font: {
                                 weight: 'bold',
@@ -1144,10 +1158,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
 
                     scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#4b5563',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
                         y: {
                             beginAtZero: true,
+                            grid: {
+                                color: '#e5e7eb'
+                            },
                             ticks: {
-                                precision: 0
+                                precision: 0,
+                                color: '#111827'
                             }
                         }
                     }
