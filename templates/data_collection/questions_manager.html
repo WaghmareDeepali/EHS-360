@@ -420,6 +420,20 @@
         padding-right: 1rem;
     }
 }
+
+.sortable-ghost {
+    opacity: 0.5;
+    background: #dbeafe !important;
+}
+
+.drag-handle {
+    color: #64748b;
+    cursor: grab;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
 </style>
 {% endblock %}
 {% block content %}
@@ -591,10 +605,16 @@
 <!-- ================= EXISTING QUESTIONS TABLE ================= -->
 <div class="existing-questions">
     <div class="table-header">
-        <h3>
-            <i class="fas fa-table"></i> Existing Questions
-            <span class="badge">{{ questions|length }}</span>
-        </h3>
+        <div class="d-flex justify-content-between align-items-center">
+            <h3>
+                <i class="fas fa-table"></i> Existing Questions
+                <span class="badge">{{ questions|length }}</span>
+            </h3>
+
+            <button type="button" class="btn btn-primary" id="editSequenceBtn">
+                <i class="fas fa-sort"></i> Save Sequence
+            </button>
+        </div>
     </div>
 
 <div class="table-wrapper">
@@ -603,6 +623,7 @@
     <table class="questions-table">
         <thead>
             <tr>
+                <th width="5%">Move</th>
                 <th style="width: 5%;">#</th>
                 <th style="width: 25%;">Question</th>
                 <th style="width: 10%;">Source</th>
@@ -613,9 +634,12 @@
             </tr>
         </thead>
 
-        <tbody>
+        <tbody id="sortableQuestions">
         {% for item in questions %}
-            <tr>
+            <tr data-question-id="{{ item.id }}">
+                <td>
+                    <i class="fas fa-grip-vertical drag-handle" style="cursor:move;"></i>
+                </td>
                 <td>{{ forloop.counter }}</td>
 
                 <td>
@@ -685,6 +709,7 @@
 
 </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // --- Element References ---
@@ -701,7 +726,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const unitsWrapper = document.getElementById('unitsWrapper');
     const unitsCheckboxContainer = document.getElementById('unitsCheckboxContainer');
     const defaultUnitSelect = document.getElementById('defaultUnitSelect');
-    
+
+    const sortableTable = document.getElementById('sortableQuestions');
+
+    if (sortableTable) {
+        new Sortable(sortableTable, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost'
+        });
+    }
+        
     // --- Source Type Change Handler ---
     sourceType.addEventListener('change', function () {
         const isManual = this.value === 'MANUAL';
@@ -862,6 +897,65 @@ document.addEventListener('DOMContentLoaded', function () {
             // We will modify the 'categorySelect' event listener to handle this.
         }
     {% endif %}
+
+
+    const saveSequenceBtn =
+        document.getElementById('editSequenceBtn');
+
+    if (saveSequenceBtn) {
+
+        saveSequenceBtn.addEventListener('click', function () {
+
+            const questionIds = [];
+
+            document.querySelectorAll(
+                '#sortableQuestions tr'
+            ).forEach(row => {
+                questionIds.push(
+                    row.dataset.questionId
+                );
+            });
+
+            fetch(
+                '/env-data/update-question-sequence/',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken':
+                            document.querySelector(
+                                '[name=csrfmiddlewaretoken]'
+                            ).value
+                    },
+                    body: JSON.stringify({
+                        question_ids: questionIds
+                    })
+                }
+            )
+            .then(response => response.json())
+            .then(data => {
+
+                if (data.success) {
+                    alert(
+                        'Question sequence saved successfully.'
+                    );
+
+                    location.reload();
+                } else {
+                    alert(
+                        data.error || 'Unable to save sequence.'
+                    );
+                }
+
+            })
+            .catch(error => {
+                console.error(error);
+                alert('Error saving sequence.');
+            });
+
+        });
+
+    }
 }
     // New function to fetch units AND pre-select them
     // function fetchAndPreselectUnits(categoryId, selectedUnitIds, defaultUnitId) {

@@ -1551,6 +1551,52 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['hazard_type_labels'] = json.dumps(hazard_type_labels)
         context['hazard_type_counts'] = json.dumps(hazard_type_counts)
         context['hazard_type_values'] = json.dumps(hazard_type_values)
+
+
+        # =====================================
+        # Hazard Overdue By Department
+        # =====================================
+
+        overdue_department_map = {}
+
+        overdue_hazards = filtered_hazards.filter(
+            action_deadline__lt=today
+        ).exclude(
+            status='CLOSED'
+        )
+
+        for hazard in overdue_hazards:
+
+            assigned_users = hazard.get_assigned_users()
+
+            if assigned_users:
+
+                for assigned_user in assigned_users:
+
+                    dept = getattr(
+                        assigned_user,
+                        'department',
+                        None
+                    )
+
+                    if dept:
+
+                        overdue_department_map[dept.name] = (
+                            overdue_department_map.get(
+                                dept.name,
+                                0
+                            ) + 1
+                        )
+
+        context['overdue_department_labels'] = json.dumps(
+            list(overdue_department_map.keys())
+        )
+
+        context['overdue_department_counts'] = json.dumps(
+            list(overdue_department_map.values())
+        )
+
+
         return context
     
 # ==================================================

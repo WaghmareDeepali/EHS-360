@@ -569,8 +569,27 @@
             </div>
         </div>
     </div>
+    <div class="col-lg-6">
+        <div class="dashboard-card">
+            <div class="card-body">
 
-    <div class="col-6">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-clock mr-2"></i>
+                        Hazard Overdue by Department
+                    </h5>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="overdueDepartmentChart"></canvas>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row mb-4">
+    <div class="col-12">
         <div class="dashboard-card">
             <div class="card-body">
                 <div class="section-header"><h5><i class="fas fa-star mr-2"></i>Top 3 Hazard Categories</h5></div>
@@ -1065,6 +1084,77 @@ document.addEventListener('DOMContentLoaded', function() {
 
             plugins: [ChartDataLabels]
         });
+    }
+
+    const overdueDepartmentCtx = document.getElementById('overdueDepartmentChart');
+    if (overdueDepartmentCtx) {
+
+        new Chart(
+            overdueDepartmentCtx.getContext('2d'),
+            {
+
+                type: 'bar',
+
+                data: {
+
+                    labels:
+                        {{ overdue_department_labels|safe }},
+
+                    datasets: [{
+
+                        label: 'Overdue Hazards',
+
+                        data:
+                            {{ overdue_department_counts|safe }},
+
+                        backgroundColor: '#dc3545',
+
+                        borderRadius: 10,
+
+                        barThickness: 35
+                    }]
+                },
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        },
+
+                        datalabels: {
+
+                            anchor: 'center',
+
+                            align: 'center',
+
+                            color: '#fff',
+
+                            font: {
+                                weight: 'bold',
+                                size: 14
+                            }
+                        }
+                    },
+
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                },
+
+                plugins: [ChartDataLabels]
+            }
+        );
     }
 
     // Top Categories Pie Chart
