@@ -120,7 +120,7 @@
     .dept-tracker-scroll {
         overflow-x: auto;
         overflow-y: hidden;
-        padding: 18px 18px 8px;
+        padding: 20px 24px 12px;
     }
     .dept-tracker-scroll::-webkit-scrollbar {
         height: 10px;
@@ -131,10 +131,11 @@
     }
     .dept-chart-stage {
         min-width: 100%;
-        height: 360px;
+        height: 420px;
     }
     .dept-chart-stage canvas {
         height: 100% !important;
+        width: 100% !important;
     }
     .dept-chart-legend-note {
         padding: 0 18px 16px;
@@ -988,7 +989,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const departmentIds = {{ department_ids|safe }};
         const departmentChartStage = departmentChartCtx.closest('.dept-chart-stage');
         if (departmentChartStage) {
-            departmentChartStage.style.width = `${Math.max(1100, departmentLabels.length * 120)}px`;
+            departmentChartStage.style.width = `${Math.max(1400, departmentLabels.length * 150)}px`;
         }
         new Chart(departmentChartCtx.getContext('2d'), {
             type: 'bar',
@@ -998,41 +999,53 @@ document.addEventListener('DOMContentLoaded', function() {
                     label: 'Total',
                     data: {{ department_total_data|safe }},
                     backgroundColor: '#0d6efd',
-                    barPercentage: 0.72,
-                    categoryPercentage: 0.62
+                    barPercentage: 0.56,
+                    categoryPercentage: 0.72,
+                    maxBarThickness: 26
                 }, {
                     label: 'Open',
                     data: {{ department_open_data|safe }},
                     backgroundColor: '#f59e0b',
-                    barPercentage: 0.72,
-                    categoryPercentage: 0.62
+                    barPercentage: 0.56,
+                    categoryPercentage: 0.72,
+                    maxBarThickness: 26
                 }, {
                     label: 'Closed',
                     data: {{ department_closed_data|safe }},
                     backgroundColor: '#28a745',
-                    barPercentage: 0.72,
-                    categoryPercentage: 0.62
+                    barPercentage: 0.56,
+                    categoryPercentage: 0.72,
+                    maxBarThickness: 26
                 }, {
                     label: 'Overdue',
                     data: {{ department_overdue_data|safe }},
                     backgroundColor: '#dc3545',
-                    barPercentage: 0.72,
-                    categoryPercentage: 0.62
+                    barPercentage: 0.56,
+                    categoryPercentage: 0.72,
+                    maxBarThickness: 26
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 18,
+                        right: 10,
+                        left: 10
+                    }
+                },
                 plugins: {
                     legend: { position: 'bottom' },
                     // ✅ CHANGED: Data labels configuration for Department chart
                     datalabels: {
                         anchor: 'end',
                         align: 'top',
-                        color: '#374151',
-                        offset: 2,
+                        color: '#111827',
+                        offset: 6,
                         font: {
-                            weight: 'bold'
+                            weight: 'bold',
+                            size: 12
                         },
                         formatter: (value) => value > 0 ? value : ''
                     }
@@ -1044,8 +1057,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         },
                         ticks: {
                             color: '#4b5563',
-                            maxRotation: 35,
-                            minRotation: 35,
+                            maxRotation: 45,
+                            minRotation: 45,
                             font: {
                                 size: 11
                             }
@@ -1058,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         },
                         ticks: {
                             precision: 0,
-                            color: '#6b7280'
+                            color: '#111827'
                         }
                     }
                 },

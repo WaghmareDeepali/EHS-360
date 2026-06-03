@@ -48,18 +48,17 @@ def filter_hazards_by_status(queryset, selected_status):
     if not selected_status:
         return queryset
 
-    today = timezone.now().date()
+    normalized_status = selected_status.upper()
 
-    if selected_status == 'open':
+    if normalized_status == 'OPEN':
         return queryset.exclude(status='CLOSED')
-    if selected_status == 'OVERDUE':
-        return queryset.filter(action_deadline__lt=today).exclude(status='CLOSED')
-    if selected_status == 'LATE_CLOSED':
-        late_closed_ids = [
+    if normalized_status in {'OVERDUE', 'CLOSED', 'CLOSED_LATE', 'LATE_CLOSED'}:
+        target_status = 'CLOSED_LATE' if normalized_status == 'LATE_CLOSED' else normalized_status
+        matched_hazard_ids = [
             hazard.pk for hazard in queryset.prefetch_related('action_items')
-            if hazard.is_late_closed
+            if hazard.effective_status == target_status
         ]
-        return queryset.filter(pk__in=late_closed_ids)
+        return queryset.filter(pk__in=matched_hazard_ids)
 
     return queryset.filter(status=selected_status)
 
@@ -1168,10 +1167,10 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         filtered_hazards = filter_hazards_by_status(filtered_hazards, selected_status)
                 
         if selected_overdue == 'true':
-            filtered_hazards = filtered_hazards.filter(action_deadline__lt=today).exclude(status='CLOSED')
-        
+            filtered_hazards = filter_hazards_by_status(filtered_hazards, 'OVERDUE')
+
         if selected_closed == 'true':
-            filtered_hazards = filtered_hazards.filter(status='CLOSED')
+            filtered_hazards = filter_hazards_by_status(filtered_hazards, 'CLOSED')
         if selected_month:
             try:
                 year, month = map(int, selected_month.split('-'))
@@ -1197,14 +1196,14 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             incident_datetime__date__lte=fy_end
         ).count()
 
-        context['closed_hazards_count'] = filtered_hazards.filter(
-            status='CLOSED'
+        context['closed_hazards_count'] = filter_hazards_by_status(
+            filtered_hazards,
+            'CLOSED'
         ).count()
 
-        context['overdue_hazards_count'] = filtered_hazards.filter(
-            action_deadline__lt=today
-        ).exclude(
-            status='CLOSED'
+        context['overdue_hazards_count'] = filter_hazards_by_status(
+            filtered_hazards,
+            'OVERDUE'
         ).count()
 
         context['this_month_hazards'] = filtered_hazards.count()
@@ -1274,7 +1273,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
                 context['selected_month_label'] = datetime.date(year, month, 1).strftime('%B %Y')
         except:
              pass
-        context['has_active_filters'] = any(context.get(key) for key in ['selected_plant', 'selected_zone', 'selected_location', 'selected_sublocation', 'selected_month', 'selected_severity', 'selected_status', 'selected_category', 'selected_department', 'selected_overdue'])
+        context['has_active_filters'] = any(context.get(key) for key in ['selected_plant', 'selected_zone', 'selected_location', 'selected_sublocation', 'selected_month', 'selected_severity', 'selected_status', 'selected_category', 'selected_department', 'selected_overdue', 'selected_closed'])
         # 6. Prepare data for lists and charts using the FILTERED queryset
         # context['recent_hazards'] = filtered_hazards.select_related('plant', 'location').order_by('-incident_datetime')[:10]
 
@@ -1624,9 +1623,9 @@ class ExportHazardsView(LoginRequiredMixin, View):
             )
         queryset = filter_hazards_by_status(queryset, selected_status)
         if selected_overdue == 'true':
-            queryset = queryset.filter(action_deadline__lt=datetime.date.today()).exclude(status='CLOSED')
+            queryset = filter_hazards_by_status(queryset, 'OVERDUE')
         if selected_closed == 'true':
-            queryset = queryset.filter(status='CLOSED')
+            queryset = filter_hazards_by_status(queryset, 'CLOSED')
         
         if selected_month:
             try:
