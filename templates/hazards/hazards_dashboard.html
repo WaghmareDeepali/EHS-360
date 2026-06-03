@@ -330,9 +330,9 @@
             </div>
             <!-- Row 2 -->
             <div class="col-md-3 mb-3">
-                <label for="department_filter" class="form-label small font-weight-bold"><i class="fas fa-building mr-1"></i> Department</label>
+                <label for="department_filter" class="form-label small font-weight-bold"><i class="fas fa-building mr-1"></i> Assigned Department</label>
                 <select name="department" id="department_filter" class="form-control">
-                    <option value="">All Departments</option>
+                    <option value="">All Assigned Departments</option>
                     {% for dept in all_departments %}
                     <option value="{{ dept.id }}" {% if selected_department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
                     {% endfor %}
@@ -378,7 +378,7 @@
                 {% if selected_zone_name %}<span class="active-filter-badge">Zone: {{ selected_zone_name }}<i class="fas fa-times" onclick="removeFilter('zone')"></i></span>{% endif %}
                 {% if selected_location_name %}<span class="active-filter-badge">Location: {{ selected_location_name }}<i class="fas fa-times" onclick="removeFilter('location')"></i></span>{% endif %}
                 {% if selected_sublocation_name %}<span class="active-filter-badge">Sub-Location: {{ selected_sublocation_name }}<i class="fas fa-times" onclick="removeFilter('sublocation')"></i></span>{% endif %}
-                {% if selected_department_name %}<span class="active-filter-badge">Dept: {{ selected_department_name }}<i class="fas fa-times" onclick="removeFilter('department')"></i></span>{% endif %}
+                {% if selected_department_name %}<span class="active-filter-badge">Assigned Dept: {{ selected_department_name }}<i class="fas fa-times" onclick="removeFilter('department')"></i></span>{% endif %}
                 {% if selected_category_name %}<span class="active-filter-badge">Category: {{ selected_category_name }}<i class="fas fa-times" onclick="removeFilter('category')"></i></span>{% endif %}
                 {% if selected_month_label %}<span class="active-filter-badge">Month: {{ selected_month_label }}<i class="fas fa-times" onclick="removeFilter('month')"></i></span>{% endif %}
                 {% if selected_severity %}<span class="active-filter-badge">Risk: {{ selected_severity|capfirst }}<i class="fas fa-times" onclick="removeFilter('severity')"></i></span>{% endif %}
@@ -414,7 +414,7 @@
                 <div class="stat-card success">
                     <i class="fas fa-check-circle stat-icon"></i>
                     <p class="stat-number">{{ closed_hazards_count }}</p>
-                    <p class="stat-label">RESOLVED Hazards</p>
+                    <p class="stat-label">Closed Hazards</p>
                 </div>
             </div>
         </a>
@@ -564,30 +564,30 @@
         <div class="dashboard-card">
             <div class="card-body">
                 <div class="section-header">
-                    <h5><i class="fas fa-building mr-2"></i>Department Hazard Tracker</h5>
+                    <h5><i class="fas fa-user-check mr-2"></i>Assigned Department Hazard Tracker</h5>
                 </div>
                 {% if department_chart_data %}
                     <div class="dept-summary-grid">
                         <div class="dept-summary-card">
                             <span class="label">Departments Covered</span>
                             <span class="value">{{ department_summary.departments_covered }}</span>
-                            <span class="meta">Across current filters</span>
+                            <span class="meta">Across assigned users</span>
                         </div>
                         <div class="dept-summary-card">
-                            <span class="label">Highest Reporting Dept</span>
+                            <span class="label">Highest Assigned Dept</span>
                             <span class="value">{{ department_summary.top_department_total }}</span>
                             <span class="meta">{{ department_summary.top_department_name }}</span>
                         </div>
                         <div class="dept-summary-card">
                             <span class="label">Open In Top Dept</span>
                             <span class="value">{{ department_summary.top_department_open }}</span>
-                            <span class="meta">Still active in {{ department_summary.top_department_name }}</span>
+                            <span class="meta">Still active for {{ department_summary.top_department_name }}</span>
                         </div>
                     </div>
                     <div class="dept-tracker-panel">
                         <div class="dept-tracker-panel-header">
                             <div>
-                                <span class="eyebrow">Department Hazard Tracker</span>
+                                <span class="eyebrow">Assigned Department Hazard Tracker</span>
                             </div>
                             <div class="d-flex align-items-center flex-wrap">
                                 <span class="metric-pill metric-total mr-2 mb-1">Total</span>
@@ -689,6 +689,7 @@
                                 <th>Sr No</th>
                                 <th>Report</th>
                                 <th>Reported By / Department</th>
+                                <th>Assigned To / Department</th>
                                 <th>Title</th>
                                 <th>Type</th>
                                 <th>Risk Level</th>
@@ -708,6 +709,17 @@
                                     <strong>{{ hazard.reported_by.get_full_name|default:hazard.reported_by.username }}</strong>
                                     <small>{{ hazard.reported_by.department.name|default:"Unassigned" }}</small>
                                 </td>
+                                <td class="reported-meta">
+                                    {% with assigned_users=hazard.get_assigned_users %}
+                                        {% for assigned_user in assigned_users %}
+                                            <strong>{{ assigned_user.get_full_name|default:assigned_user.username }}</strong><br>
+                                            <small>{{ assigned_user.department.name|default:"Unassigned" }}</small><br>
+                                        {% empty %}
+                                            <strong>Unassigned</strong><br>
+                                            <small>Unassigned</small>
+                                        {% endfor %}
+                                    {% endwith %}
+                                </td>
                                 <td>{{ hazard.hazard_title|truncatewords:5 }}</td>
                                 <td>{{ hazard.get_hazard_type_display }}</td>
                                 <td>
@@ -725,7 +737,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="9" class="text-center text-muted py-4"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No recent hazards found</td></tr>
+                            <tr><td colspan="10" class="text-center text-muted py-4"><i class="fas fa-inbox fa-3x mb-3 d-block"></i>No recent hazards found</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -914,13 +926,13 @@ document.addEventListener('DOMContentLoaded', function() {
             scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
             onClick: (e, elements) => {
                 if (elements.length > 0) {
-                    // This array holds the actual status keys like 'REPORTED', 'RESOLVED', etc.
+                    // This array holds the actual status keys like 'REPORTED', 'CLOSED', etc.
                     const statusKeys = {{ status_keys|safe }};
                     // It finds the key corresponding to the bar you clicked.
                     const clickedStatusKey = statusKeys[elements[0].index];
                     
                     const currentParams = new URLSearchParams(window.location.search);
-                    // It correctly sets the URL parameter to the specific key (e.g., status=RESOLVED).
+                    // It correctly sets the URL parameter to the specific key (e.g., status=CLOSED).
                     currentParams.set('status', clickedStatusKey);
                     window.location.href = window.location.pathname + '?' + currentParams.toString();
                 }

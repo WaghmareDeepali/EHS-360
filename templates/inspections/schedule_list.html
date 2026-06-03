@@ -205,6 +205,12 @@
                                             <i class="fas fa-eye"></i>
                                         </a>
                                         {% endif %}
+                                        {% if user|has_perm:'EXPORT_INSPECTION_PDF' or user|has_perm:'VIEW_INSPECTION' %}
+                                        <a href="{% url 'inspections:schedule_pdf' schedule.pk %}" 
+                                        class="btn btn-sm btn-danger" title="Download PDF">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </a>
+                                        {% endif %}
                                         {% if user|has_perm:'EDIT_INSPECTION' %}
                                         {% if schedule.status != 'CLOSED' and schedule.status != 'LATE_CLOSE' and schedule.status != 'CANCELLED' %}
                                         <a href="{% url 'inspections:schedule_edit' schedule.pk %}" 

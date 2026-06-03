@@ -10,6 +10,7 @@ from django.core.paginator import EmptyPage, Paginator
 from django.urls import reverse
 from django.utils import timezone
 from django.db import transaction
+from django.views import View
 from django.views.generic import TemplateView
 from django.db.models import Count, Avg
 
@@ -21,6 +22,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 
 from .models import *
 from .forms import *
+from .utils import generate_inspection_pdf
 from apps.notifications.services import NotificationService
 from apps.organizations.models import Plant, Zone, Location, SubLocation, Department
 
@@ -1203,6 +1205,36 @@ def schedule_detail(request, pk):
         ),
     }
     return render(request, 'inspections/schedule_detail.html', context)
+
+
+class InspectionPDFDownloadView(LoginRequiredMixin, View):
+    """Generate PDF report for an inspection schedule."""
+
+    def get(self, request, pk):
+        schedule = get_object_or_404(
+            InspectionSchedule.objects.select_related(
+                'template',
+                'assigned_to',
+                'assigned_by',
+                'department'
+            ).prefetch_related(
+                'plants', 'zones', 'locations', 'sublocations', 'assigned_users'
+            ),
+            pk=pk
+        )
+
+        if not (
+            request.user.is_superuser or
+            request.user.is_admin_user or
+            request.user.has_permission('EXPORT_INSPECTION_PDF') or
+            request.user.has_permission('VIEW_INSPECTION')
+        ):
+            messages.error(request, "You don't have permission to download this report")
+            return redirect('inspections:schedule_list')
+
+        return generate_inspection_pdf(schedule)
+
+
 @login_required
 def get_users_by_plants(request):
     """
@@ -1510,6 +1542,14 @@ def _build_inspection_form_context(
         }
 
     selected_scope = _get_selected_scope_ids(active_source or {}, inspection_scope)
+    if not active_source:
+        selected_scope = {
+            'selected_plant_ids': list(available_plants.values_list('id', flat=True)),
+            'selected_zone_ids': list(available_zones.values_list('id', flat=True)),
+            'selected_location_ids': list(available_locations.values_list('id', flat=True)),
+            'selected_sublocation_ids': list(available_sublocations.values_list('id', flat=True)),
+        }
+
     answers_by_question = (active_source or {}).get('answers', {})
     remarks_by_question = (active_source or {}).get('remarks', {})
 
@@ -1524,7 +1564,10 @@ def _build_inspection_form_context(
         tq.draft_photo = draft_photo_map.get(tq.question.id)
         questions_by_category[tq.question.category].append(tq)
 
-    header_plants = available_plants if available_plants.exists() else schedule.plants.filter(is_active=True)
+    header_plants = available_plants
+    header_zones = available_zones
+    header_locations = available_locations
+    header_sublocations = available_sublocations
 
     return {
         'schedule': schedule,
@@ -1535,6 +1578,9 @@ def _build_inspection_form_context(
         'available_locations': available_locations,
         'available_sublocations': available_sublocations,
         'header_plants': header_plants,
+        'header_zones': header_zones,
+        'header_locations': header_locations,
+        'header_sublocations': header_sublocations,
         'selected_plant_ids': selected_scope['selected_plant_ids'],
         'selected_zone_ids': selected_scope['selected_zone_ids'],
         'selected_location_ids': selected_scope['selected_location_ids'],

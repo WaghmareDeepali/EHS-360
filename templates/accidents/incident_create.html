@@ -738,10 +738,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const bodyPartsSection = document.getElementById('bodyPartsSection');
     const natureOfInjuryField = document.getElementById('id_nature_of_injury');
     const form = document.getElementById('incidentForm');
-    const incidentVideoInput = document.getElementById('videos');
-    const incidentVideoCameraInput = document.getElementById('videos_camera');
-    const incidentVideoPreview = document.getElementById('incidentVideoPreview');
-    const incidentVideoModal = document.getElementById('incidentVideoOptionModal');
     let isSubmitting = false;
     
     // Age calculation fields
@@ -919,146 +915,159 @@ document.addEventListener('DOMContentLoaded', function() {
         timeInput.value = now.toTimeString().split(' ')[0].substring(0, 5);
     }
 
-    document.getElementById('uploadIncidentVideosBtn').addEventListener('click', function() {
-        if (isMobileOrTablet()) {
-            incidentVideoModal.style.display = 'block';
-        } else {
-            incidentVideoInput.click();
-        }
-    });
-
-    document.getElementById('recordIncidentVideoBtn').addEventListener('click', function() {
-        incidentVideoModal.style.display = 'none';
-        incidentVideoCameraInput.click();
-    });
-
-    document.getElementById('chooseIncidentVideoBtn').addEventListener('click', function() {
-        incidentVideoModal.style.display = 'none';
-        incidentVideoInput.click();
-    });
-
-    document.getElementById('cancelIncidentVideoBtn').addEventListener('click', function() {
-        incidentVideoModal.style.display = 'none';
-    });
-
-    incidentVideoInput.addEventListener('change', function() {
-        renderIncidentVideoPreview(this.files);
-    });
-
-    incidentVideoCameraInput.addEventListener('change', function() {
-        if (!this.files.length) {
-            return;
-        }
-
-        const dataTransfer = new DataTransfer();
-        Array.from(this.files).forEach(file => dataTransfer.items.add(file));
-        incidentVideoInput.files = dataTransfer.files;
-        renderIncidentVideoPreview(incidentVideoInput.files);
-    });
-
-    function renderIncidentVideoPreview(files) {
-        if (!files || !files.length) {
-            incidentVideoPreview.innerHTML = '';
-            return;
-        }
-
-        incidentVideoPreview.innerHTML = Array.from(files).map(file => `
-            <div class="mb-3">
-                <div class="small text-muted mb-1">${file.name}</div>
-                <video controls style="width: 100%; max-width: 320px; border-radius: 10px;">
-                    <source src="${URL.createObjectURL(file)}" type="${file.type}">
-                </video>
-            </div>
-        `).join('');
-    }
-
     function isMobileOrTablet() {
         return /Android|iPhone|iPad|iPod|Tablet/i.test(navigator.userAgent);
     }
 
+    // ================= VIDEO UPLOAD =================
+    const uploadIncidentVideosBtn = document.getElementById('uploadIncidentVideosBtn');
+    const recordIncidentVideoBtn = document.getElementById('recordIncidentVideoBtn');
+    const chooseIncidentVideoBtn = document.getElementById('chooseIncidentVideoBtn');
+    const cancelIncidentVideoBtn = document.getElementById('cancelIncidentVideoBtn');
+    const incidentVideoInput = document.getElementById('videos');
+    const incidentVideoCameraInput = document.getElementById('videos_camera');
+    const incidentVideoPreview = document.getElementById('incidentVideoPreview');
+    const incidentVideoModal = document.getElementById('incidentVideoOptionModal');
+
+    if (
+        uploadIncidentVideosBtn &&
+        recordIncidentVideoBtn &&
+        chooseIncidentVideoBtn &&
+        cancelIncidentVideoBtn &&
+        incidentVideoInput &&
+        incidentVideoCameraInput &&
+        incidentVideoPreview &&
+        incidentVideoModal
+    ) {
+        uploadIncidentVideosBtn.addEventListener('click', function() {
+            if (isMobileOrTablet()) {
+                incidentVideoModal.style.display = 'block';
+            } else {
+                incidentVideoInput.click();
+            }
+        });
+
+        recordIncidentVideoBtn.addEventListener('click', function() {
+            incidentVideoModal.style.display = 'none';
+            incidentVideoCameraInput.click();
+        });
+
+        chooseIncidentVideoBtn.addEventListener('click', function() {
+            incidentVideoModal.style.display = 'none';
+            incidentVideoInput.click();
+        });
+
+        cancelIncidentVideoBtn.addEventListener('click', function() {
+            incidentVideoModal.style.display = 'none';
+        });
+
+        incidentVideoInput.addEventListener('change', function() {
+            renderIncidentVideoPreview(this.files);
+        });
+
+        incidentVideoCameraInput.addEventListener('change', function() {
+            if (!this.files.length) {
+                return;
+            }
+
+            const dataTransfer = new DataTransfer();
+            Array.from(this.files).forEach(file => dataTransfer.items.add(file));
+            incidentVideoInput.files = dataTransfer.files;
+            renderIncidentVideoPreview(incidentVideoInput.files);
+        });
+
+        function renderIncidentVideoPreview(files) {
+            if (!files || !files.length) {
+                incidentVideoPreview.innerHTML = '';
+                return;
+            }
+
+            incidentVideoPreview.innerHTML = Array.from(files).map(file => `
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">${file.name}</div>
+                    <video controls style="width: 100%; max-width: 320px; border-radius: 10px;">
+                        <source src="${URL.createObjectURL(file)}" type="${file.type}">
+                    </video>
+                </div>
+            `).join('');
+        }
+    }
+
     // ================= PHOTO UPLOAD =================
+    const uploadIncidentPhotosBtn = document.getElementById('uploadIncidentPhotosBtn');
+    const captureIncidentPhotoBtn = document.getElementById('captureIncidentPhotoBtn');
+    const chooseIncidentPhotoBtn = document.getElementById('chooseIncidentPhotoBtn');
+    const cancelIncidentPhotoBtn = document.getElementById('cancelIncidentPhotoBtn');
+    const incidentPhotoInput = document.getElementById('photos');
+    const incidentPhotoCameraInput = document.getElementById('photos_camera');
+    const incidentPhotoPreview = document.getElementById('incidentPhotoPreview');
+    const incidentPhotoModal = document.getElementById('incidentPhotoOptionModal');
 
-const incidentPhotoInput = document.getElementById('photos');
-const incidentPhotoCameraInput = document.getElementById('photos_camera');
-const incidentPhotoPreview = document.getElementById('incidentPhotoPreview');
-const incidentPhotoModal = document.getElementById('incidentPhotoOptionModal');
+    if (
+        uploadIncidentPhotosBtn &&
+        captureIncidentPhotoBtn &&
+        chooseIncidentPhotoBtn &&
+        cancelIncidentPhotoBtn &&
+        incidentPhotoInput &&
+        incidentPhotoCameraInput &&
+        incidentPhotoPreview &&
+        incidentPhotoModal
+    ) {
+        uploadIncidentPhotosBtn.addEventListener('click', function () {
+            if (isMobileOrTablet()) {
+                incidentPhotoModal.style.display = 'block';
+            } else {
+                incidentPhotoInput.click();
+            }
+        });
 
-// Open modal
-document.getElementById('uploadIncidentPhotosBtn').addEventListener('click', function () {
+        captureIncidentPhotoBtn.addEventListener('click', function () {
+            incidentPhotoModal.style.display = 'none';
+            incidentPhotoCameraInput.click();
+        });
 
-    if (isMobileOrTablet()) {
-        incidentPhotoModal.style.display = 'block';
-    } else {
-        incidentPhotoInput.click();
+        chooseIncidentPhotoBtn.addEventListener('click', function () {
+            incidentPhotoModal.style.display = 'none';
+            incidentPhotoInput.click();
+        });
+
+        cancelIncidentPhotoBtn.addEventListener('click', function () {
+            incidentPhotoModal.style.display = 'none';
+        });
+
+        incidentPhotoInput.addEventListener('change', function () {
+            renderIncidentPhotoPreview(this.files);
+        });
+
+        incidentPhotoCameraInput.addEventListener('change', function () {
+            if (!this.files.length) {
+                return;
+            }
+
+            const dataTransfer = new DataTransfer();
+            Array.from(this.files).forEach(file => {
+                dataTransfer.items.add(file);
+            });
+
+            incidentPhotoInput.files = dataTransfer.files;
+            renderIncidentPhotoPreview(incidentPhotoInput.files);
+        });
+
+        function renderIncidentPhotoPreview(files) {
+            if (!files || !files.length) {
+                incidentPhotoPreview.innerHTML = '';
+                return;
+            }
+
+            incidentPhotoPreview.innerHTML = Array.from(files).map(file => `
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">${file.name}</div>
+                    <img src="${URL.createObjectURL(file)}"
+                         style="width:100%; max-width:220px; border-radius:10px; border:1px solid #ddd;">
+                </div>
+            `).join('');
+        }
     }
-});
-
-// Open Camera
-document.getElementById('captureIncidentPhotoBtn').addEventListener('click', function () {
-
-    incidentPhotoModal.style.display = 'none';
-    incidentPhotoCameraInput.click();
-});
-
-// Choose From Device
-document.getElementById('chooseIncidentPhotoBtn').addEventListener('click', function () {
-
-    incidentPhotoModal.style.display = 'none';
-    incidentPhotoInput.click();
-});
-
-// Cancel
-document.getElementById('cancelIncidentPhotoBtn').addEventListener('click', function () {
-
-    incidentPhotoModal.style.display = 'none';
-});
-
-// Normal File Select
-incidentPhotoInput.addEventListener('change', function () {
-
-    renderIncidentPhotoPreview(this.files);
-});
-
-// Camera Capture
-incidentPhotoCameraInput.addEventListener('change', function () {
-
-    if (!this.files.length) {
-        return;
-    }
-
-    const dataTransfer = new DataTransfer();
-
-    Array.from(this.files).forEach(file => {
-        dataTransfer.items.add(file);
-    });
-
-    incidentPhotoInput.files = dataTransfer.files;
-
-    renderIncidentPhotoPreview(incidentPhotoInput.files);
-});
-
-// Preview Function
-function renderIncidentPhotoPreview(files) {
-
-    if (!files || !files.length) {
-        incidentPhotoPreview.innerHTML = '';
-        return;
-    }
-
-    incidentPhotoPreview.innerHTML = Array.from(files).map(file => `
-
-        <div class="mb-3">
-            <div class="small text-muted mb-1">${file.name}</div>
-
-            <img src="${URL.createObjectURL(file)}"
-                 style="width:100%; max-width:220px;
-                        border-radius:10px;
-                        border:1px solid #ddd;">
-        </div>
-
-    `).join('');
-}
-
 
     const plantSelect = document.getElementById('id_plant');
     const zoneSelect = document.getElementById('id_zone');

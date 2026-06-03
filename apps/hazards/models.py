@@ -50,7 +50,6 @@ class Hazard(models.Model):
         # ('UNDER_REVIEW', 'Under Review'),
         ('ACTION_ASSIGNED', 'Action Assigned'),
         ('IN_PROGRESS', 'In Progress'),
-        ('RESOLVED', 'Resolved'),
         ('CLOSED', 'Closed'),
     ]
     
@@ -336,7 +335,7 @@ class Hazard(models.Model):
         all_completed = all(item.status == 'COMPLETED' for item in action_items)
         
         if all_completed:
-            self.status = 'RESOLVED'
+            self.status = 'CLOSED'
             self.save(update_fields=['status'])
         elif action_items.filter(status='IN_PROGRESS').exists():
             self.status = 'IN_PROGRESS'
@@ -344,11 +343,34 @@ class Hazard(models.Model):
         elif action_items.filter(status='PENDING').exists() and self.status == 'REPORTED':
             self.status = 'ACTION_ASSIGNED'
             self.save(update_fields=['status'])      
+
+    def get_assigned_users(self):
+        """
+        Return all users assigned through hazard action items.
+        Falls back to the legacy `assigned_to` field when no action item
+        assignees exist yet.
+        """
+        assigned_users = []
+        seen_user_ids = set()
+
+        for action_item in self.action_items.all():
+            related_users = list(action_item.get_pending_users()) + list(action_item.completed_by_users.all())
+
+            for user in related_users:
+                if not user or user.pk in seen_user_ids:
+                    continue
+                assigned_users.append(user)
+                seen_user_ids.add(user.pk)
+
+        if not assigned_users and self.assigned_to:
+            assigned_users.append(self.assigned_to)
+
+        return assigned_users
         
     @property
     def is_action_overdue(self):
         """Check if action is overdue"""
-        if self.action_deadline and self.status not in ['RESOLVED', 'CLOSED']:
+        if self.action_deadline and self.status != 'CLOSED':
             return datetime.date.today() > self.action_deadline
         return False
 
@@ -366,14 +388,14 @@ class Hazard(models.Model):
         if latest_action_completion:
             return latest_action_completion
 
-        if self.status in ['RESOLVED', 'CLOSED']:
+        if self.status == 'CLOSED':
             return timezone.localtime(self.updated_at).date()
         return None
 
     @property
     def is_late_closed(self):
-        """True when the hazard was resolved/closed after the deadline date."""
-        if self.status not in ['RESOLVED', 'CLOSED'] or not self.action_deadline:
+        """True when the hazard was closed after the deadline date."""
+        if self.status != 'CLOSED' or not self.action_deadline:
             return False
 
         completed_or_closed_date = self.completed_or_closed_date
@@ -422,8 +444,7 @@ class Hazard(models.Model):
             'UNDER_REVIEW': 'badge-primary',
             'ACTION_ASSIGNED': 'badge-warning', # <-- Updated
             'IN_PROGRESS': 'badge-info',
-            'RESOLVED': 'badge-success',
-            'CLOSED': 'badge-secondary',
+            'CLOSED': 'badge-success',
             'REJECTED': 'badge-danger',
             'PENDING_APPROVAL': 'badge-light',
             'APPROVED': 'badge-primary',

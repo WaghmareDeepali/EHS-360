@@ -51,9 +51,9 @@ def filter_hazards_by_status(queryset, selected_status):
     today = timezone.now().date()
 
     if selected_status == 'open':
-        return queryset.exclude(status__in=['RESOLVED', 'CLOSED'])
+        return queryset.exclude(status='CLOSED')
     if selected_status == 'OVERDUE':
-        return queryset.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED'])
+        return queryset.filter(action_deadline__lt=today).exclude(status='CLOSED')
     if selected_status == 'LATE_CLOSED':
         late_closed_ids = [
             hazard.pk for hazard in queryset.prefetch_related('action_items')
@@ -81,7 +81,7 @@ class HazardDashboardView(LoginRequiredMixin, TemplateView):
         
         # Statistics (This part is already correct)
         context['total_hazards'] = hazards.count()
-        context['open_hazards'] = hazards.exclude(status__in=['RESOLVED', 'CLOSED']).count()
+        context['open_hazards'] = hazards.exclude(status='CLOSED').count()
         context['this_month_hazards'] = hazards.filter(
             incident_datetime__month=datetime.date.today().month,
             incident_datetime__year=datetime.date.today().year
@@ -1131,8 +1131,8 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         # 3. Calculate top-level stats BEFORE applying any filters.
         # context['total_hazards'] = base_hazards.count()
-        # context['closed_hazards_count'] = base_hazards.filter(status__in=['RESOLVED', 'CLOSED']).count()
-        # context['overdue_hazards_count'] = base_hazards.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED']).count()
+        # context['closed_hazards_count'] = base_hazards.filter(status='CLOSED').count()
+        # context['overdue_hazards_count'] = base_hazards.filter(action_deadline__lt=today).exclude(status='CLOSED').count()
         # this_month_total = base_hazards.filter(incident_datetime__year=today.year, incident_datetime__month=today.month).count()
 
 
@@ -1160,16 +1160,18 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         if selected_category: # <-- NEW
             filtered_hazards = filtered_hazards.filter(hazard_category=selected_category)
         if selected_department: # <-- NEW
-            filtered_hazards = filtered_hazards.filter(reported_by__department_id=selected_department)
+            filtered_hazards = filtered_hazards.filter(
+                Q(assigned_to__department_id=selected_department) |
+                Q(assigned_to__department__isnull=True, reported_by__department_id=selected_department)
+            )
             
         filtered_hazards = filter_hazards_by_status(filtered_hazards, selected_status)
                 
         if selected_overdue == 'true':
-            filtered_hazards = filtered_hazards.filter(action_deadline__lt=today).exclude(status__in=['RESOLVED', 'CLOSED'])
+            filtered_hazards = filtered_hazards.filter(action_deadline__lt=today).exclude(status='CLOSED')
         
         if selected_closed == 'true':
-            filtered_hazards = filtered_hazards.filter(status__in=['RESOLVED', 'CLOSED']
-                                                       )
+            filtered_hazards = filtered_hazards.filter(status='CLOSED')
         if selected_month:
             try:
                 year, month = map(int, selected_month.split('-'))
@@ -1196,13 +1198,13 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         ).count()
 
         context['closed_hazards_count'] = filtered_hazards.filter(
-            status__in=['RESOLVED', 'CLOSED']
+            status='CLOSED'
         ).count()
 
         context['overdue_hazards_count'] = filtered_hazards.filter(
             action_deadline__lt=today
         ).exclude(
-            status__in=['RESOLVED', 'CLOSED']
+            status='CLOSED'
         ).count()
 
         context['this_month_hazards'] = filtered_hazards.count()
@@ -1279,9 +1281,15 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         from django.core.paginator import Paginator
 
         hazards_qs = filtered_hazards.select_related(
-            'plant', 'location', 'reported_by', 'reported_by__department'
+            'plant',
+            'location',
+            'reported_by',
+            'reported_by__department',
+            'assigned_to',
+            'assigned_to__department',
         ).prefetch_related(
-            'action_items'
+            'action_items',
+            'action_items__completed_by_users',
         ).order_by('-incident_datetime')
 
         paginator = Paginator(hazards_qs, 10)  # 10 per page
@@ -1350,31 +1358,66 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['status_keys'] = json.dumps(status_keys)
         context['status_data'] = json.dumps(status_data)
         
-        department_distribution = list(
-            filtered_hazards.annotate(
-                reporter_department_name=Coalesce(
-                    'reported_by__department__name',
-                    Value('Unassigned')
-                )
-            ).values(
-                'reported_by__department_id',
-                'reporter_department_name'
-            ).annotate(
-                total=Count('id'),
-                closed_count=Count('id', filter=Q(status__in=['RESOLVED', 'CLOSED'])),
-                overdue_count=Count(
-                    'id',
-                    filter=Q(action_deadline__lt=today) & ~Q(status__in=['RESOLVED', 'CLOSED'])
-                ),
-                critical_count=Count('id', filter=Q(severity='critical'))
-            ).order_by('-total', 'reporter_department_name')
+        department_map = {}
+        for hazard in hazards_qs:
+            assigned_users = hazard.get_assigned_users()
+            if assigned_users:
+                hazard_department_keys = set()
+                for assigned_user in assigned_users:
+                    assigned_department = getattr(assigned_user, 'department', None)
+                    department_key = assigned_department.id if assigned_department else 'unassigned'
+                    if department_key in hazard_department_keys:
+                        continue
+                    hazard_department_keys.add(department_key)
+
+                    if department_key not in department_map:
+                        department_map[department_key] = {
+                            'assigned_department_id': assigned_department.id if assigned_department else '',
+                            'name': assigned_department.name if assigned_department else 'Unassigned',
+                            'total': 0,
+                            'closed_count': 0,
+                            'overdue_count': 0,
+                            'critical_count': 0,
+                        }
+
+                    row = department_map[department_key]
+                    row['total'] += 1
+                    if hazard.status == 'CLOSED':
+                        row['closed_count'] += 1
+                    elif hazard.action_deadline and hazard.action_deadline < today:
+                        row['overdue_count'] += 1
+                    if hazard.severity == 'critical':
+                        row['critical_count'] += 1
+            else:
+                department_key = 'unassigned'
+                if department_key not in department_map:
+                    department_map[department_key] = {
+                        'assigned_department_id': '',
+                        'name': 'Unassigned',
+                        'total': 0,
+                        'closed_count': 0,
+                        'overdue_count': 0,
+                        'critical_count': 0,
+                    }
+
+                row = department_map[department_key]
+                row['total'] += 1
+                if hazard.status == 'CLOSED':
+                    row['closed_count'] += 1
+                elif hazard.action_deadline and hazard.action_deadline < today:
+                    row['overdue_count'] += 1
+                if hazard.severity == 'critical':
+                    row['critical_count'] += 1
+
+        department_distribution = sorted(
+            department_map.values(),
+            key=lambda item: (-item['total'], item['name'])
         )
 
         for item in department_distribution:
-            item['name'] = item['reporter_department_name']
             item['open_count'] = item['total'] - item['closed_count']
 
-        department_ids = [item['reported_by__department_id'] for item in department_distribution]
+        department_ids = [item['assigned_department_id'] for item in department_distribution]
         department_labels = [item['name'] for item in department_distribution]
         department_total_data = [item['total'] for item in department_distribution]
         department_open_data = [item['open_count'] for item in department_distribution]
@@ -1430,7 +1473,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
                 row['late_close_count'] += 1
             elif effective_status == 'OVERDUE':
                 row['overdue_count'] += 1
-            elif effective_status in ['RESOLVED', 'CLOSED']:
+            elif effective_status == 'CLOSED':
                 row['closed_count'] += 1
             elif effective_status == 'IN_PROGRESS':
                 row['in_progress_count'] += 1
@@ -1575,12 +1618,15 @@ class ExportHazardsView(LoginRequiredMixin, View):
         if selected_category:
             queryset = queryset.filter(hazard_category=selected_category)
         if selected_department:
-            queryset = queryset.filter(reported_by__department_id=selected_department)
+            queryset = queryset.filter(
+                Q(assigned_to__department_id=selected_department) |
+                Q(assigned_to__department__isnull=True, reported_by__department_id=selected_department)
+            )
         queryset = filter_hazards_by_status(queryset, selected_status)
         if selected_overdue == 'true':
-            queryset = queryset.filter(action_deadline__lt=datetime.date.today()).exclude(status__in=['RESOLVED', 'CLOSED'])
+            queryset = queryset.filter(action_deadline__lt=datetime.date.today()).exclude(status='CLOSED')
         if selected_closed == 'true':
-            queryset = queryset.filter(status__in=['RESOLVED', 'CLOSED'])
+            queryset = queryset.filter(status='CLOSED')
         
         if selected_month:
             try:
@@ -1591,7 +1637,14 @@ class ExportHazardsView(LoginRequiredMixin, View):
         
         # Optimize database queries.
         queryset = queryset.select_related(
-            'plant', 'zone', 'location', 'sublocation', 'reported_by', 'reported_by__department'
+            'plant',
+            'zone',
+            'location',
+            'sublocation',
+            'reported_by',
+            'reported_by__department',
+            'assigned_to',
+            'assigned_to__department'
         )
 
         # --- Excel generation code starts here ---
@@ -1626,9 +1679,11 @@ class ExportHazardsView(LoginRequiredMixin, View):
             if reporter and not reporter_name:
                 reporter_name = reporter.username or reporter.email or 'N/A'
 
+            assigned_user = getattr(hazard, 'assigned_to', None)
+            assigned_department = getattr(getattr(assigned_user, 'department', None), 'name', '')
             reporter_department = getattr(getattr(reporter, 'department', None), 'name', 'N/A')
             reported_by_display = reporter_name if reporter_name else 'N/A'
-            department_display = reporter_department if reporter_department else 'N/A'
+            department_display = assigned_department or reporter_department or 'N/A'
 
             row_data = [
                 hazard.report_number or '',
