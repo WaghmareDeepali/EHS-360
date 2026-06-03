@@ -1405,7 +1405,7 @@ def my_inspections(request):
         ).count(),
         'CLOSED': InspectionSchedule.objects.filter(
             assigned_to=request.user,
-            status__in=['CLOSED', 'CLOSE_LATE']
+            status__in=['CLOSED', 'CLOSED_LATE']
         ).count(),
         'overdue': InspectionSchedule.objects.filter(
             assigned_to=request.user,
@@ -1473,7 +1473,7 @@ def generate_finding_code(submission):
 
 def _get_inspection_completion_status(schedule):
     """Return the final status for a submitted inspection."""
-    return 'CLOSE_LATE' if '[RESTARTED_FROM:' in (schedule.assignment_notes or '') else 'CLOSED'
+    return 'CLOSED_LATE' if '[RESTARTED_FROM:' in (schedule.assignment_notes or '') else 'CLOSED'
 
 
 def _get_selected_scope_ids(source_data, inspection_scope):

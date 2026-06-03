@@ -390,7 +390,7 @@ class InspectionSchedule(models.Model):
         ('SCHEDULED', 'Scheduled'),
         ('IN_PROGRESS', 'In Progress'),
         ('CLOSED', 'Closed'),
-        ('CLOSE_LATE', 'Close Late'),
+        ('CLOSED_LATE', 'Closed Late'),
         ('OVERDUE', 'Overdue'),
         ('CANCELLED', 'Cancelled'),
     ]
