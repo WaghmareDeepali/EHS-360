@@ -18,6 +18,14 @@ class NotificationService:
     """
     Generic notification service that uses NotificationMaster configurations
     """
+
+    @staticmethod
+    def _get_user_full_name(user, default='N/A'):
+        """Return a safe display name for optional user references."""
+        if not user:
+            return default
+        full_name = user.get_full_name()
+        return full_name if full_name else default
     
     @staticmethod
     def get_stakeholders_for_event(event_type, plant=None, location=None, zone=None):
@@ -690,7 +698,7 @@ EHS Management System
             'title': f"Inspection Submitted | {schedule.schedule_code}",
             'subject': f"✅ Inspection Submitted - {schedule.schedule_code}",
             'message': f"""
-Hello {schedule.assigned_by.get_full_name()},
+Hello {NotificationService._get_user_full_name(schedule.assigned_by)},
 
 An inspection has been submitted and requires your review.
 
@@ -743,7 +751,7 @@ Plant              : {", ".join([p.name for p in schedule.plants.all()]) if sche
 ASSIGNED DETAILS
 --------------------------------------------------
 Assigned To        : {schedule.assigned_to.get_full_name()}
-Assigned By        : {schedule.assigned_by.get_full_name()}
+Assigned By        : {NotificationService._get_user_full_name(schedule.assigned_by)}
 Scheduled Date     : {schedule.scheduled_date}
 Due Date           : {schedule.due_date}
 
@@ -778,7 +786,7 @@ Schedule Code      : {schedule.schedule_code}
 Template           : {schedule.template.template_name}
 Inspection Type    : {schedule.template.get_inspection_type_display()}
 Plant              : {", ".join([p.name for p in schedule.plants.all()]) if schedule.plants.exists() else "N/A"}Department         : {schedule.department.name if schedule.department else 'N/A'}
-Assigned By        : {schedule.assigned_by.get_full_name()}
+Assigned By        : {NotificationService._get_user_full_name(schedule.assigned_by)}
 Scheduled Date     : {schedule.scheduled_date}
 Due Date           : {schedule.due_date}
 Current Status     : {schedule.get_status_display()}
@@ -804,7 +812,7 @@ EHS Management System
             'subject': f"⚠️ Non-Compliance Assigned - {schedule.schedule_code}",
             'message': f"""
 
-Hello {response.assigned_to.get_full_name()},
+Hello {NotificationService._get_user_full_name(response.assigned_to)},
 
 A non-compliance item has been assigned to you for corrective action.
 
@@ -817,7 +825,7 @@ Plant              : {schedule.plant.name}
 Department         : {schedule.department.name if schedule.department else 'N/A'}
 Question           : {response.question.question_text}
 Response           : {response.answer}
-Assigned By        : {response.assigned_by.get_full_name()}
+Assigned By        : {NotificationService._get_user_full_name(response.assigned_by)}
 Assigned On        : {response.assigned_at}
 Remarks            : {response.assignment_remarks if response.assignment_remarks else 'N/A'}
 
