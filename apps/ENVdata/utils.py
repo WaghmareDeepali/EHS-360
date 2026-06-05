@@ -8,6 +8,186 @@ from openpyxl.utils import get_column_letter
 from .models import EnvironmentalQuestion, MonthlyIndicatorAttachment, MonthlyIndicatorData
 
 
+SOURCE_TYPE_LABELS = {
+    "INCIDENT": "Injury Module",
+    "HAZARD": "Hazard Module",
+    "INSPECTION": "Fire Inspection Module",
+    "MANUAL": "Manual Entry",
+}
+
+ALL_STATUS_VALUE = "ALL_STATUS"
+ALL_STATUS_DISPLAY = "All Status"
+
+INCIDENT_REPORTED_STATUSES = [
+    "REPORTED",
+    "INVESTIGATION_IN_PROGRESS",
+    "ACTION_PLAN_PENDING",
+    "PENDING_APPROVAL",
+    "PENDING_CLOSE",
+]
+
+HAZARD_REPORTED_STATUSES = [
+    "REPORTED",
+    "ACTION_ASSIGNED",
+    "IN_PROGRESS",
+]
+
+
+def get_source_type_label(source_type):
+    return SOURCE_TYPE_LABELS.get(source_type, source_type.title() if source_type else "")
+
+
+def get_all_status_choice():
+    return {"value": ALL_STATUS_VALUE, "display": ALL_STATUS_DISPLAY}
+
+
+def get_status_choices_for_source(source_type):
+    if source_type == "INCIDENT":
+        from apps.accidents.models import Incident
+        return list(Incident.STATUS_CHOICES)
+    if source_type == "HAZARD":
+        from apps.hazards.models import Hazard
+        return list(Hazard.STATUS_CHOICES)
+    if source_type == "INSPECTION":
+        from apps.inspections.models import InspectionSchedule
+        return list(InspectionSchedule.STATUS_CHOICES)
+    return []
+
+
+def get_status_display_label(source_type, status_value):
+    if status_value == ALL_STATUS_VALUE:
+        return ALL_STATUS_DISPLAY
+
+    choices_map = dict(get_status_choices_for_source(source_type))
+    return choices_map.get(status_value, (status_value or "").replace("_", " ").title())
+
+
+def get_status_filter_values(source_type, status_value):
+    if status_value == ALL_STATUS_VALUE:
+        return []
+
+    if status_value != "REPORTED":
+        return [status_value]
+
+    if source_type == "INCIDENT":
+        return INCIDENT_REPORTED_STATUSES
+
+    if source_type == "HAZARD":
+        return HAZARD_REPORTED_STATUSES
+
+    return [status_value]
+
+
+def get_filter_value_display(source_type, field_name, value):
+    if not value:
+        return value
+
+    if field_name == "status":
+        return get_status_display_label(source_type, value)
+
+    if field_name == "hazard_type":
+        from apps.hazards.models import Hazard
+        return dict(Hazard.HAZARD_TYPE_CHOICES).get(value, value)
+
+    if field_name == "inspection_type":
+        from apps.inspections.models import InspectionTemplate
+        return dict(InspectionTemplate.INSPECTION_TYPE_CHOICES).get(value, value)
+
+    if field_name == "assigned_to":
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.filter(id=value).first()
+        return user.get_full_name() if user else value
+
+    if field_name == "plant":
+        from apps.organizations.models import Plant
+
+        plant = Plant.objects.filter(id=value).first()
+        return plant.name if plant else value
+
+    if field_name == "template":
+        from apps.inspections.models import InspectionTemplate
+
+        template = InspectionTemplate.objects.filter(id=value).first()
+        return f"{template.template_code} - {template.template_name}" if template else value
+
+    if field_name == "incident_type":
+        from apps.accidents.models import IncidentType
+
+        incident_type = IncidentType.objects.filter(id=value).first()
+        return f"{incident_type.code} - {incident_type.name}" if incident_type else value
+
+    if field_name == "severity":
+        return {
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "critical": "Critical",
+        }.get(value, value)
+
+    return value
+
+
+def apply_single_filter(queryset, source_type, field_name, value):
+    if not field_name or value in [None, ""]:
+        return queryset
+
+    if field_name == "status":
+        status_values = get_status_filter_values(source_type, value)
+        if not status_values:
+            return queryset
+        if len(status_values) == 1:
+            return queryset.filter(status=status_values[0])
+        return queryset.filter(status__in=status_values)
+
+    if source_type == "INCIDENT":
+        if field_name == "incident_type":
+            return queryset.filter(incident_type_id=value)
+        if field_name == "plant":
+            return queryset.filter(plant_id=value)
+
+    if source_type == "HAZARD":
+        if field_name == "hazard_type":
+            return queryset.filter(hazard_type=value)
+        if field_name == "severity":
+            return queryset.filter(severity=value)
+        if field_name == "plant":
+            return queryset.filter(plant_id=value)
+
+    if source_type == "INSPECTION":
+        if field_name == "template":
+            return queryset.filter(template_id=value)
+        if field_name == "inspection_type":
+            return queryset.filter(template__inspection_type=value)
+        if field_name == "plant":
+            return queryset.filter(plants__id=value)
+        if field_name == "assigned_to":
+            return queryset.filter(assigned_to_id=value)
+
+    return queryset.filter(**{field_name: value})
+
+
+def apply_question_filters(queryset, question):
+    if question.filter_field and question.filter_value:
+        queryset = apply_single_filter(
+            queryset,
+            question.source_type,
+            question.filter_field,
+            question.filter_value,
+        )
+
+    if question.filter_field_2 and question.filter_value_2:
+        queryset = apply_single_filter(
+            queryset,
+            question.source_type,
+            question.filter_field_2,
+            question.filter_value_2,
+        )
+
+    return queryset
+
+
 class EnvironmentalDataFetcher:
     """
     Dynamic data fetcher for auto-calculated environmental questions.
@@ -50,20 +230,7 @@ class EnvironmentalDataFetcher:
                 incident_date__year=year,
             )
 
-            if question.filter_field == "incident_type" and question.filter_value:
-                queryset = queryset.filter(incident_type_id=question.filter_value)
-            elif question.filter_field == "status" and question.filter_value:
-                queryset = queryset.filter(status=question.filter_value)
-            elif question.filter_field == "plant" and question.filter_value:
-                queryset = queryset.filter(plant_id=question.filter_value)
-
-            if question.filter_field_2 and question.filter_value_2:
-                if question.filter_field_2 == "incident_type":
-                    queryset = queryset.filter(incident_type_id=question.filter_value_2)
-                elif question.filter_field_2 == "status":
-                    queryset = queryset.filter(status=question.filter_value_2)
-                elif question.filter_field_2 == "plant":
-                    queryset = queryset.filter(plant_id=question.filter_value_2)
+            queryset = apply_question_filters(queryset, question)
 
             return queryset.count()
 
@@ -76,24 +243,7 @@ class EnvironmentalDataFetcher:
                 incident_datetime__month=month,
             )
 
-            if question.filter_field == "hazard_type" and question.filter_value:
-                queryset = queryset.filter(hazard_type=question.filter_value)
-            elif question.filter_field == "severity" and question.filter_value:
-                queryset = queryset.filter(severity=question.filter_value)
-            elif question.filter_field == "status" and question.filter_value:
-                queryset = queryset.filter(status=question.filter_value)
-            elif question.filter_field == "plant" and question.filter_value:
-                queryset = queryset.filter(plant_id=question.filter_value)
-
-            if question.filter_field_2 and question.filter_value_2:
-                if question.filter_field_2 == "hazard_type":
-                    queryset = queryset.filter(hazard_type=question.filter_value_2)
-                elif question.filter_field_2 == "severity":
-                    queryset = queryset.filter(severity=question.filter_value_2)
-                elif question.filter_field_2 == "status":
-                    queryset = queryset.filter(status=question.filter_value_2)
-                elif question.filter_field_2 == "plant":
-                    queryset = queryset.filter(plant_id=question.filter_value_2)
+            queryset = apply_question_filters(queryset, question)
 
             return queryset.count()
 
@@ -106,29 +256,7 @@ class EnvironmentalDataFetcher:
                 scheduled_date__year=year,
             )
 
-            if question.filter_field and question.filter_value:
-                if question.filter_field == "template":
-                    queryset = queryset.filter(template_id=question.filter_value)
-                elif question.filter_field == "inspection_type":
-                    queryset = queryset.filter(template__inspection_type=question.filter_value)
-                elif question.filter_field == "status":
-                    queryset = queryset.filter(status=question.filter_value)
-                elif question.filter_field == "plant":
-                    queryset = queryset.filter(plants__id=question.filter_value)
-                elif question.filter_field == "assigned_to":
-                    queryset = queryset.filter(assigned_to_id=question.filter_value)
-
-            if question.filter_field_2 and question.filter_value_2:
-                if question.filter_field_2 == "template":
-                    queryset = queryset.filter(template_id=question.filter_value_2)
-                elif question.filter_field_2 == "inspection_type":
-                    queryset = queryset.filter(template__inspection_type=question.filter_value_2)
-                elif question.filter_field_2 == "status":
-                    queryset = queryset.filter(status=question.filter_value_2)
-                elif question.filter_field_2 == "plant":
-                    queryset = queryset.filter(plants__id=question.filter_value_2)
-                elif question.filter_field_2 == "assigned_to":
-                    queryset = queryset.filter(assigned_to_id=question.filter_value_2)
+            queryset = apply_question_filters(queryset, question)
 
             return queryset.distinct().count()
 

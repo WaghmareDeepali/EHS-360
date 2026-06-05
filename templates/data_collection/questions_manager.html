@@ -493,7 +493,7 @@
                 <label>Source Type <span class="required">*</span></label>
                 <select name="source_type" id="sourceType" class="form-control" required>
                     <option value="MANUAL" {% if editing_question.source_type == 'MANUAL' %}selected{% endif %}>Manual Entry</option>
-                    <option value="INCIDENT" {% if editing_question.source_type == 'INCIDENT' %}selected{% endif %}>Incident Module</option>
+                    <option value="INCIDENT" {% if editing_question.source_type == 'INCIDENT' %}selected{% endif %}>Injury Module</option>
                     <option value="HAZARD" {% if editing_question.source_type == 'HAZARD' %}selected{% endif %}>Hazard Module</option>
                     <option value="INSPECTION" {% if editing_question.source_type == 'INSPECTION' %}selected{% endif %}>Inspection Module</option>
 
@@ -509,7 +509,7 @@
                     <select name="filter_field" id="filterField" class="form-control">
                         <option value="">-- Select Field to Filter --</option>
                     </select>
-                    <small>Choose which field to filter by (e.g., incident_type, hazard_type)</small>
+                    <small>Choose which field to filter by (e.g., injury_type, hazard_type)</small>
                 </div>
 
                 <div class="form-group" id="filterValueSection" style="display:none;">
@@ -539,11 +539,11 @@
 
                 <div class="alert alert-info">
                     <strong><i class="fas fa-lightbulb"></i> Examples:</strong><br>
-                    <!-- Incident Examples -->
-                    <strong>Incidents:</strong><br>
-                    • <strong>All Fatalities:</strong> incident_type = FATALITY<br>
-                    • <strong>LTI Reported:</strong> incident_type = LTI + status = REPORTED<br>
-                    • <strong>Closed MTC Cases:</strong> incident_type = MTC + status = CLOSED<br>
+                    <!-- Injury Examples -->
+                    <strong>Injuries:</strong><br>
+                    • <strong>All Fatalities:</strong> injury_type = FATALITY<br>
+                    • <strong>LTI Reported:</strong> injury_type = LTI + status = REPORTED<br>
+                    • <strong>Closed MTC Cases:</strong> injury_type = MTC + status = CLOSED<br>
                     
                     <!-- Hazard Examples -->
                     <strong>Hazards:</strong><br>
@@ -586,7 +586,7 @@
             </div>
 
             <div style="display:flex; gap:10px;">
-                <button type="submit" class="btn btn-success">
+                <button type="submit" class="btn btn-success" id="submitBtn">
                     {% if editing_question %}
                         <i class="fas fa-save"></i> Update Question
                     {% else %}
@@ -648,7 +648,7 @@
 
                 <td>
                     <span class="source-badge {% if item.source_type == 'MANUAL' %}source-manual{% else %}source-auto{% endif %}">
-                        {{ item.source_type }}
+                        {{ item.source_type_display|default:item.source_type }}
                     </span>
                 </td>
 
@@ -726,6 +726,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const unitsWrapper = document.getElementById('unitsWrapper');
     const unitsCheckboxContainer = document.getElementById('unitsCheckboxContainer');
     const defaultUnitSelect = document.getElementById('defaultUnitSelect');
+    let pendingSelectedUnitIds = [];
+    let pendingDefaultUnitId = '';
 
     const sortableTable = document.getElementById('sortableQuestions');
 
@@ -749,11 +751,16 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!isManual) {
             unitsWrapper.style.display = 'none';
             categorySelect.value = '';
+        } else {
+            filterField.innerHTML = '<option value="">-- Select Field to Filter --</option>';
+            filterField2.innerHTML = '<option value="">-- No Secondary Filter --</option>';
+            filterValueSection.style.display = 'none';
+            filterValueSection2.style.display = 'none';
         }
         
         // Load fields for auto-calculated questions
         if (!isManual) {
-            loadSourceFields(this.value);
+            loadSourceFields(this.value, window.__editingQuestionConfig || null);
         }
     });
 
@@ -772,7 +779,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        updateUnitSelectionUI(data.units);
+                        updateUnitSelectionUI(data.units, pendingSelectedUnitIds);
+                        if (pendingDefaultUnitId) {
+                            defaultUnitSelect.value = pendingDefaultUnitId;
+                        }
+                        window.updateDefaultUnitDropdown();
                     } else {
                         unitsCheckboxContainer.innerHTML = `<div class="empty">Error: ${data.error || 'Could not load units'}</div>`;
                         defaultUnitSelect.innerHTML = '<option value="">-- Error --</option>';
@@ -789,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // --- Update Unit Selection UI ---
-    function updateUnitSelectionUI(units) {
+    function updateUnitSelectionUI(units, selectedUnitIds = []) {
         unitsCheckboxContainer.innerHTML = '';
         defaultUnitSelect.innerHTML = '<option value="">-- Select Default Unit --</option>';
 
@@ -799,11 +810,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         units.forEach(unit => {
+            const isChecked = selectedUnitIds.includes(String(unit.id));
             // Create checkbox
             const label = document.createElement('label');
             label.className = 'unit-checkbox';
             label.innerHTML = `
-                <input type="checkbox" name="selected_unit_ids[]" value="${unit.id}" onchange="updateDefaultUnitDropdown()">
+                <input type="checkbox" name="selected_unit_ids[]" value="${unit.id}" onchange="updateDefaultUnitDropdown()" ${isChecked ? 'checked' : ''}>
                 ${unit.name} (${unit.base_unit})
             `;
             unitsCheckboxContainer.appendChild(label);
@@ -843,8 +855,8 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // --- Load Source Fields for Auto-Calculated Questions ---
-    function loadSourceFields(sourceType) {
-        fetch(`/env-data/api/get-source-fields/?source_type=${sourceType}`)
+    function loadSourceFields(sourceType, editConfig = null) {
+        return fetch(`/env-data/api/get-source-fields/?source_type=${sourceType}`)
             .then(response => response.json())
             .then(data => {
                 filterField.innerHTML = '<option value="">-- Select Field to Filter --</option>';
@@ -860,6 +872,25 @@ document.addEventListener('DOMContentLoaded', function () {
                         filterField.appendChild(option.cloneNode(true));
                         filterField2.appendChild(option);
                     });
+
+                    if (editConfig) {
+                        if (editConfig.filter_field) {
+                            filterField.value = editConfig.filter_field;
+                            filterField.dispatchEvent(new Event('change'));
+                            if (editConfig.filter_value) {
+                                filterValue.value = editConfig.filter_value;
+                            }
+                        }
+
+                        if (editConfig.filter_field_2) {
+                            filterField2.value = editConfig.filter_field_2;
+                            filterField2.dispatchEvent(new Event('change'));
+                            if (editConfig.filter_value_2) {
+                                filterValue2.value = editConfig.filter_value_2;
+                            }
+                        }
+                        window.__editingQuestionConfig = null;
+                    }
                 }
             })
             .catch(error => {
@@ -874,10 +905,15 @@ document.addEventListener('DOMContentLoaded', function () {
             source_type: "{{ editing_question.source_type }}",
             category_id: "{{ editing_question.unit_category.id }}",
             default_unit_id: "{{ editing_question.default_unit.id }}",
+            filter_field: "{{ editing_question.filter_field|default:'' }}",
+            filter_value: "{{ editing_question.filter_value|default:'' }}",
+            filter_field_2: "{{ editing_question.filter_field_2|default:'' }}",
+            filter_value_2: "{{ editing_question.filter_value_2|default:'' }}",
             selected_unit_ids: [
                 {% for unit in editing_question.selected_units.all %}"{{ unit.id }}",{% endfor %}
             ]
         };
+        window.__editingQuestionConfig = editingQuestion;
 
         // 1. Set the source type dropdown's value
         sourceType.value = editingQuestion.source_type;
@@ -886,6 +922,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 3. If it's a manual question, set the category dropdown's value
         if (editingQuestion.source_type === 'MANUAL' && editingQuestion.category_id) {
+            pendingSelectedUnitIds = editingQuestion.selected_unit_ids;
+            pendingDefaultUnitId = editingQuestion.default_unit_id;
             categorySelect.value = editingQuestion.category_id;
             
             // 4. THIS IS THE FIX: Manually trigger the category's 'change' event.
@@ -895,6 +933,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // The AJAX listener will now handle loading and pre-selecting the units.
             // We need to wait for the AJAX to finish before setting the default unit.
             // We will modify the 'categorySelect' event listener to handle this.
+            window.__editingQuestionConfig = null;
         }
     {% endif %}
 

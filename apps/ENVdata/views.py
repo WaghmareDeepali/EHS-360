@@ -58,17 +58,25 @@ class GetSourceFieldsAPIView(LoginRequiredMixin, View):
                 
                 # ✅ Get incident status choices from model
                 from apps.accidents.models import Incident
-                status_choices = []
-                if hasattr(Incident, 'STATUS_CHOICES'):
-                    status_choices = [
-                        {'value': choice[0], 'display': choice[1]} 
-                        for choice in Incident.STATUS_CHOICES
-                    ]
+                status_choices = [
+                    {'value': choice[0], 'display': choice[1]}
+                    for choice in getattr(Incident, 'STATUS_CHOICES', [])
+                ]
+                status_choices = [get_all_status_choice()] + status_choices if status_choices else [
+                    get_all_status_choice(),
+                    {'value': 'REPORTED', 'display': 'Reported'},
+                    {'value': 'INVESTIGATION_IN_PROGRESS', 'display': 'Investigation in Progress'},
+                    {'value': 'ACTION_PLAN_PENDING', 'display': 'Action Plan Pending'},
+                    {'value': 'PENDING_APPROVAL', 'display': 'Pending Approval'},
+                    {'value': 'REJECTED', 'display': 'Rejected'},
+                    {'value': 'PENDING_CLOSE', 'display': 'Pending Close'},
+                    {'value': 'CLOSED', 'display': 'Closed'},
+                ]
                 
                 fields = [
                     {
                         'field_name': 'incident_type',
-                        'field_verbose_name': 'Incident Type',
+                        'field_verbose_name': 'Injury Type',
                         'choices': incident_type_choices
                     },
                     {
@@ -76,9 +84,11 @@ class GetSourceFieldsAPIView(LoginRequiredMixin, View):
                         'field_verbose_name': 'Status',
                         'choices': status_choices if status_choices else [
                             {'value': 'REPORTED', 'display': 'Reported'},
-                            {'value': 'UNDER_INVESTIGATION', 'display': 'Under Investigation'},
-                            {'value': 'ACTION_IN_PROGRESS', 'display': 'Action In Progress'},
-                            {'value': 'COMPLETED', 'display': 'Completed'},
+                            {'value': 'INVESTIGATION_IN_PROGRESS', 'display': 'Investigation in Progress'},
+                            {'value': 'ACTION_PLAN_PENDING', 'display': 'Action Plan Pending'},
+                            {'value': 'PENDING_APPROVAL', 'display': 'Pending Approval'},
+                            {'value': 'REJECTED', 'display': 'Rejected'},
+                            {'value': 'PENDING_CLOSE', 'display': 'Pending Close'},
                             {'value': 'CLOSED', 'display': 'Closed'},
                         ]
                     },
@@ -114,12 +124,17 @@ class GetSourceFieldsAPIView(LoginRequiredMixin, View):
                         ]
                     
                     # Get status choices from model
-                    hazard_status_choices = []
-                    if hasattr(Hazard, 'STATUS_CHOICES'):
-                        hazard_status_choices = [
-                            {'value': choice[0], 'display': choice[1]} 
-                            for choice in Hazard.STATUS_CHOICES
-                        ]
+                    hazard_status_choices = [
+                        {'value': choice[0], 'display': choice[1]}
+                        for choice in getattr(Hazard, 'STATUS_CHOICES', [])
+                    ]
+                    hazard_status_choices = [get_all_status_choice()] + hazard_status_choices if hazard_status_choices else [
+                        get_all_status_choice(),
+                        {'value': 'REPORTED', 'display': 'Reported'},
+                        {'value': 'ACTION_ASSIGNED', 'display': 'Action Assigned'},
+                        {'value': 'IN_PROGRESS', 'display': 'In Progress'},
+                        {'value': 'CLOSED', 'display': 'Closed'},
+                    ]
                     
                     fields = [
                         {
@@ -171,9 +186,18 @@ class GetSourceFieldsAPIView(LoginRequiredMixin, View):
                         for choice in InspectionTemplate.INSPECTION_TYPE_CHOICES
                     ]
                     from apps.inspections.models import InspectionSchedule
-                    status_choices=[
-                        {'value':choice[0],'display':choice[1]}
+                    status_choices = [
+                        {'value': choice[0], 'display': choice[1]}
                         for choice in InspectionSchedule.STATUS_CHOICES
+                    ]
+                    status_choices = [get_all_status_choice()] + status_choices if status_choices else [
+                        get_all_status_choice(),
+                        {'value': 'SCHEDULED', 'display': 'Scheduled'},
+                        {'value': 'IN_PROGRESS', 'display': 'In Progress'},
+                        {'value': 'CLOSED', 'display': 'Closed'},
+                        {'value': 'CLOSED_LATE', 'display': 'Closed Late'},
+                        {'value': 'OVERDUE', 'display': 'Overdue'},
+                        {'value': 'CANCELLED', 'display': 'Cancelled'},
                     ]
                     fields = [
                         {
@@ -762,8 +786,6 @@ class EnvironmentalQuestionsManagerView(LoginRequiredMixin, View):
 
     def load_questions(self):
         """Load questions with human-readable filter descriptions"""
-        from apps.accidents.models import IncidentType
-        
         questions_list = []
         for q in EnvironmentalQuestion.objects.filter(is_active=True).order_by("is_system", "order", "id"):
             selected_units = q.selected_units.all()
@@ -772,177 +794,17 @@ class EnvironmentalQuestionsManagerView(LoginRequiredMixin, View):
             if q.filter_field and q.filter_value:
                 # Get human-readable filter description
                 filter_field_name = q.get_filter_field_display() if hasattr(q, 'get_filter_field_display') else q.filter_field
-                
-                # ✅ Handle different field types
-                if q.filter_field == 'incident_type':
-                    try:
-                        incident_type = IncidentType.objects.get(id=q.filter_value)
-                        filter_value_display = f"{incident_type.code} - {incident_type.name}"
-                    except IncidentType.DoesNotExist:
-                        filter_value_display = q.filter_value
-                
-                elif q.filter_field == 'hazard_type':
-                    try:
-                        from apps.hazards.models import HazardType
-                        hazard_type = HazardType.objects.get(id=q.filter_value)
-                        filter_value_display = f"{hazard_type.code} - {hazard_type.name}"
-                    except:
-                        filter_value_display = q.filter_value
-                
-                # ========================================
-                # ⬇️ ADD THIS NEW SECTION FOR INSPECTION
-                # ========================================
-                elif q.filter_field == 'template':
-                    try:
-                        from apps.inspections.models import InspectionTemplate
-                        template = InspectionTemplate.objects.get(id=q.filter_value)
-                        filter_value_display = f"{template.template_code} - {template.template_name}"
-                    except:
-                        filter_value_display = q.filter_value
-                
-                elif q.filter_field == 'inspection_type':
-                    # Map inspection type codes to display names
-                    from apps.inspections.models import InspectionTemplate
-                    inspection_type_map = dict(InspectionTemplate.INSPECTION_TYPE_CHOICES)
-                    filter_value_display = inspection_type_map.get(q.filter_value, q.filter_value)
-                
-                elif q.filter_field == 'assigned_to':
-                    try:
-                        from django.contrib.auth import get_user_model
-                        User = get_user_model()
-                        user = User.objects.get(id=q.filter_value)
-                        filter_value_display = user.get_full_name()
-                    except:
-                        filter_value_display = q.filter_value
-                # ========================================
-                # ⬆️ END OF INSPECTION SECTION
-                # ========================================
-                
-                elif q.filter_field == 'status':
-                    # Map status codes to display names
-                    status_map = {
-                        'REPORTED': 'Reported',
-                        'UNDER_INVESTIGATION': 'Under Investigation',
-                        'ACTION_IN_PROGRESS': 'Action In Progress',
-                        'COMPLETED': 'Completed',
-                        'CLOSED': 'Closed',
-                        'OPEN': 'Open',
-                        'IN_PROGRESS': 'In Progress',
-                        'RESOLVED': 'Resolved',
-                        'SCHEDULED': 'Scheduled',  # ⬅️ ADD THIS
-                        'OVERDUE': 'Overdue',      # ⬅️ ADD THIS
-                        'CANCELLED': 'Cancelled',  # ⬅️ ADD THIS
-                    }
-                    filter_value_display = status_map.get(q.filter_value, q.filter_value)
-                
-                elif q.filter_field == 'severity':
-                    severity_map = {
-                        'LOW': 'Low',
-                        'MEDIUM': 'Medium',
-                        'HIGH': 'High',
-                        'CRITICAL': 'Critical',
-                    }
-                    filter_value_display = severity_map.get(q.filter_value, q.filter_value)
-                
-                elif q.filter_field == 'plant':
-                    try:
-                        plant = Plant.objects.get(id=q.filter_value)
-                        filter_value_display = plant.name
-                    except Plant.DoesNotExist:
-                        filter_value_display = q.filter_value
-                
-                else:
-                    filter_value_display = q.filter_value
-                
+                filter_value_display = get_filter_value_display(q.source_type, q.filter_field, q.filter_value)
                 filter_desc = f"{filter_field_name} = {filter_value_display}"
-                
-                # ✅ Secondary filter (same logic)
                 if q.filter_field_2 and q.filter_value_2:
                     filter_field_2_name = q.get_filter_field_2_display() if hasattr(q, 'get_filter_field_2_display') else q.filter_field_2
-                    
-                    if q.filter_field_2 == 'incident_type':
-                        try:
-                            incident_type_2 = IncidentType.objects.get(id=q.filter_value_2)
-                            filter_value_2_display = f"{incident_type_2.code} - {incident_type_2.name}"
-                        except IncidentType.DoesNotExist:
-                            filter_value_2_display = q.filter_value_2
-                    
-                    elif q.filter_field_2 == 'hazard_type':
-                        try:
-                            from apps.hazards.models import HazardType
-                            hazard_type_2 = HazardType.objects.get(id=q.filter_value_2)
-                            filter_value_2_display = f"{hazard_type_2.code} - {hazard_type_2.name}"
-                        except:
-                            filter_value_2_display = q.filter_value_2
-                    
-                    # ========================================
-                    # ⬇️ ADD THIS FOR SECONDARY INSPECTION FILTER
-                    # ========================================
-                    elif q.filter_field_2 == 'template':
-                        try:
-                            from apps.inspections.models import InspectionTemplate
-                            template_2 = InspectionTemplate.objects.get(id=q.filter_value_2)
-                            filter_value_2_display = f"{template_2.template_code} - {template_2.template_name}"
-                        except:
-                            filter_value_2_display = q.filter_value_2
-                    
-                    elif q.filter_field_2 == 'inspection_type':
-                        from apps.inspections.models import InspectionTemplate
-                        inspection_type_map = dict(InspectionTemplate.INSPECTION_TYPE_CHOICES)
-                        filter_value_2_display = inspection_type_map.get(q.filter_value_2, q.filter_value_2)
-                    
-                    elif q.filter_field_2 == 'assigned_to':
-                        try:
-                            from django.contrib.auth import get_user_model
-                            User = get_user_model()
-                            user_2 = User.objects.get(id=q.filter_value_2)
-                            filter_value_2_display = user_2.get_full_name()
-                        except:
-                            filter_value_2_display = q.filter_value_2
-                    # ========================================
-                    # ⬆️ END OF SECONDARY INSPECTION FILTER
-                    # ========================================
-                    
-                    elif q.filter_field_2 == 'status':
-                        status_map = {
-                            'REPORTED': 'Reported',
-                            'UNDER_INVESTIGATION': 'Under Investigation',
-                            'ACTION_IN_PROGRESS': 'Action In Progress',
-                            'COMPLETED': 'Completed',
-                            'CLOSED': 'Closed',
-                            'OPEN': 'Open',
-                            'IN_PROGRESS': 'In Progress',
-                            'RESOLVED': 'Resolved',
-                            'SCHEDULED': 'Scheduled',
-                            'OVERDUE': 'Overdue',
-                            'CANCELLED': 'Cancelled',
-                        }
-                        filter_value_2_display = status_map.get(q.filter_value_2, q.filter_value_2)
-                    
-                    elif q.filter_field_2 == 'severity':
-                        severity_map = {
-                            'LOW': 'Low',
-                            'MEDIUM': 'Medium',
-                            'HIGH': 'High',
-                            'CRITICAL': 'Critical',
-                        }
-                        filter_value_2_display = severity_map.get(q.filter_value_2, q.filter_value_2)
-                    
-                    elif q.filter_field_2 == 'plant':
-                        try:
-                            plant_2 = Plant.objects.get(id=q.filter_value_2)
-                            filter_value_2_display = plant_2.name
-                        except Plant.DoesNotExist:
-                            filter_value_2_display = q.filter_value_2
-                    
-                    else:
-                        filter_value_2_display = q.filter_value_2
-                    
+                    filter_value_2_display = get_filter_value_display(q.source_type, q.filter_field_2, q.filter_value_2)
                     filter_desc += f" AND {filter_field_2_name} = {filter_value_2_display}"
             
             questions_list.append({
                 "id": q.id,
                 "question": q.question_text,
+                "source_type_display": get_source_type_label(q.source_type),
                 "category_id": q.unit_category.id if q.unit_category else None,
                 "category_name": q.unit_category.name if q.unit_category else "Not Set",
                 "default_unit_id": q.default_unit.id if q.default_unit else None,
@@ -1053,6 +915,10 @@ class EnvironmentalQuestionsManagerView(LoginRequiredMixin, View):
         default_unit_id = request.POST.get("default_unit_id")
         selected_unit_ids = request.POST.getlist("selected_unit_ids[]")
         source_type = request.POST.get("source_type", "MANUAL")
+        filter_field = (request.POST.get("filter_field") or "").strip()
+        filter_value = (request.POST.get("filter_value") or "").strip()
+        filter_field_2 = (request.POST.get("filter_field_2") or "").strip()
+        filter_value_2 = (request.POST.get("filter_value_2") or "").strip()
         
         # Validation
         if not question_text:
@@ -1064,22 +930,53 @@ class EnvironmentalQuestionsManagerView(LoginRequiredMixin, View):
             messages.error(request, "Another question with this text already exists.")
             return redirect("environmental:questions-manager-edit", question_id=question.id)
 
+        if source_type != 'MANUAL':
+            if not filter_field or not filter_value:
+                messages.error(request, "Primary filter field and value are required.")
+                return redirect("environmental:questions-manager-edit", question_id=question.id)
+
+            from apps.ENVdata.models import UnitCategory, Unit
+
+            count_category = UnitCategory.objects.filter(name__iexact="Count").first()
+            count_unit = Unit.objects.filter(name__iexact="Count").first()
+
+            if not count_category or not count_unit:
+                messages.error(request, "Count category or unit not configured.")
+                return redirect("environmental:questions-manager-edit", question_id=question.id)
+
+            category_id = count_category.id
+            default_unit_id = count_unit.id
+            selected_unit_ids = [str(count_unit.id)]
+        else:
+            if not category_id or not default_unit_id or not selected_unit_ids:
+                messages.error(request, "Category and units are required for manual entry questions.")
+                return redirect("environmental:questions-manager-edit", question_id=question.id)
+
+            if str(default_unit_id) not in [str(unit_id) for unit_id in selected_unit_ids]:
+                messages.error(request, "Default unit must be one of the selected units.")
+                return redirect("environmental:questions-manager-edit", question_id=question.id)
+
         # Update the question object with new values
         question.question_text = question_text
         question.unit_category_id = category_id if category_id else None
         question.default_unit_id = default_unit_id if default_unit_id else None
         question.source_type = source_type
-        # ... (Update other fields like filter_field, etc. as needed)
+        question.filter_field = filter_field if filter_field else None
+        question.filter_value = filter_value if filter_value else None
+        question.filter_field_2 = filter_field_2 if filter_field_2 else None
+        question.filter_value_2 = filter_value_2 if filter_value_2 else None
         
         # Save the changes to the database
         question.save()
 
         # Update the many-to-many relationship for selected units
-        if selected_unit_ids:
-            question.selected_units.set(selected_unit_ids)
+        if source_type == 'MANUAL':
+            if selected_unit_ids:
+                question.selected_units.set(selected_unit_ids)
+            else:
+                question.selected_units.clear()
         else:
-            # If no units are selected, clear the existing ones
-            question.selected_units.clear()
+            question.selected_units.set(selected_unit_ids)
 
         messages.success(request, f"✓ Question '{question.question_text}' updated successfully!")
         return redirect("environmental:questions-manager")
@@ -1465,27 +1362,15 @@ class EnvironmentalDashboardView(LoginRequiredMixin, TemplateView):
 
                         if model_tuple:
                             model, plant_field = model_tuple
-                            filters = {f"{plant_field}": plant,"created_at__gte": start_date,"created_at__lt": end_date,}
+                            filters = {
+                                f"{plant_field}": plant,
+                                "created_at__gte": start_date,
+                                "created_at__lt": end_date,
+                            }
 
-                            if q.filter_field and q.filter_value:
-                                field = q.filter_field
-                                if q.source_type == "INSPECTION":
-                                    if field == "inspection_type":
-                                        field = "template__inspection_type"
-                                    elif field == "template":
-                                        field = "template_id"
-                                filters[field] = q.filter_value
-
-                            if q.filter_field_2 and q.filter_value_2:
-                                field = q.filter_field_2
-                                if q.source_type == "INSPECTION":
-                                    if field == "inspection_type":
-                                        field = "template__inspection_type"
-                                    elif field == "template":
-                                        field = "template_id"
-                                filters[field] = q.filter_value_2
-
-                            value = model.objects.filter(**filters).count()
+                            queryset = model.objects.filter(**filters)
+                            queryset = apply_question_filters(queryset, q)
+                            value = queryset.distinct().count() if q.source_type == "INSPECTION" else queryset.count()
 
                     if value not in [None, "", 0]:
                         data_qs.append({"plant": plant,"indicator": q,"month": month_code,"value": value,"updated_at":updated_at,"category": q.unit_category.name if q.unit_category else "Other"})
