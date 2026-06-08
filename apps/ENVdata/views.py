@@ -1372,7 +1372,7 @@ class EnvironmentalDashboardView(LoginRequiredMixin, TemplateView):
                             queryset = apply_question_filters(queryset, q)
                             value = queryset.distinct().count() if q.source_type == "INSPECTION" else queryset.count()
 
-                    if value not in [None, "", 0]:
+                    if value not in [None, ""]:
                         data_qs.append({"plant": plant,"indicator": q,"month": month_code,"value": value,"updated_at":updated_at,"category": q.unit_category.name if q.unit_category else "Other"})
 
 

@@ -320,8 +320,10 @@ def format_decimal(value):
         return "-"
     if not isinstance(value, Decimal):
         value = Decimal(str(value))
-    normalized = value.normalize()
-    return format(normalized, "f").rstrip("0").rstrip(".") or "0"
+    formatted = format(value.normalize(), "f")
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted or "0"
 
 
 def get_environmental_questions():
