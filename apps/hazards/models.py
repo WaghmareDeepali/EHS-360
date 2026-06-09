@@ -337,12 +337,9 @@ class Hazard(models.Model):
         if all_completed:
             self.status = 'CLOSED'
             self.save(update_fields=['status'])
-        elif action_items.filter(status='IN_PROGRESS').exists():
-            self.status = 'IN_PROGRESS'
-            self.save(update_fields=['status'])
-        elif action_items.filter(status='PENDING').exists() and self.status == 'REPORTED':
+        elif self.status != 'CLOSED':
             self.status = 'ACTION_ASSIGNED'
-            self.save(update_fields=['status'])      
+            self.save(update_fields=['status'])
 
     def get_assigned_users(self):
         """
@@ -404,16 +401,19 @@ class Hazard(models.Model):
     @property
     def effective_status(self):
         """Computed status used in the UI without changing the stored model field."""
+        base_status = 'ACTION_ASSIGNED' if self.status == 'IN_PROGRESS' else self.status
         if self.is_late_closed:
             return 'CLOSED_LATE'
         if self.is_action_overdue:
             return 'OVERDUE'
-        return self.status
+        return base_status
 
     @property
     def effective_status_display(self):
         """Human-readable computed status label."""
         status_display_map = {
+            'REPORTED': 'Reported',
+            'ACTION_ASSIGNED': 'Action Assigned',
             'OVERDUE': 'Overdue',
             'CLOSED_LATE': 'Closed Late',
         }
@@ -437,13 +437,11 @@ class Hazard(models.Model):
     
     @property
     def status_badge_class(self):
-        # --- SUGGESTED UPDATE ---
-        # Added 'ACTION_ASSIGNED' for better visual feedback in the UI.
         status_classes = {
             'REPORTED': 'badge-info',
             'UNDER_REVIEW': 'badge-primary',
-            'ACTION_ASSIGNED': 'badge-warning', # <-- Updated
-            'IN_PROGRESS': 'badge-info',
+            'ACTION_ASSIGNED': 'badge-warning',
+            'IN_PROGRESS': 'badge-warning',
             'CLOSED': 'badge-success',
             'REJECTED': 'badge-danger',
             'PENDING_APPROVAL': 'badge-light',

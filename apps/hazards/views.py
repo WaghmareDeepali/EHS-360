@@ -37,10 +37,15 @@ import colorsys
 User = get_user_model()
 
 
-HAZARD_STATUS_FILTER_CHOICES = list(Hazard.STATUS_CHOICES) + [
+HAZARD_STATUS_FILTER_CHOICES = [
+    ('REPORTED', 'Reported'),
+    ('ACTION_ASSIGNED', 'Action Assigned'),
+    ('CLOSED', 'Closed'),
     ('OVERDUE', 'Overdue'),
     ('CLOSED_LATE', 'Closed Late'),
 ]
+
+HAZARD_STATUS_LABELS = dict(HAZARD_STATUS_FILTER_CHOICES)
 
 
 def filter_hazards_by_status(queryset, selected_status):
@@ -50,8 +55,17 @@ def filter_hazards_by_status(queryset, selected_status):
 
     normalized_status = selected_status.upper()
 
+    if normalized_status == 'IN_PROGRESS':
+        normalized_status = 'ACTION_ASSIGNED'
+
     if normalized_status == 'OPEN':
         return queryset.exclude(status='CLOSED')
+    if normalized_status in {'REPORTED', 'ACTION_ASSIGNED'}:
+        matched_hazard_ids = [
+            hazard.pk for hazard in queryset.prefetch_related('action_items')
+            if hazard.effective_status == normalized_status
+        ]
+        return queryset.filter(pk__in=matched_hazard_ids)
     if normalized_status in {'OVERDUE', 'CLOSED', 'CLOSED_LATE', 'LATE_CLOSED'}:
         target_status = 'CLOSED_LATE' if normalized_status == 'LATE_CLOSED' else normalized_status
         matched_hazard_ids = [
@@ -1333,6 +1347,42 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['top_hazard_categories'] = top_categories_query  
         # context['top_hazard_categories'] = top_categories_query.exists() # Check if data exists for chart
 
+        hazard_category_distribution = (
+            filtered_hazards.values('hazard_category')
+            .annotate(count=Count('id'))
+            .order_by('-count', 'hazard_category')
+        )
+        category_counts = {
+            item['hazard_category']: item['count']
+            for item in hazard_category_distribution
+        }
+        all_category_labels = [label for _, label in Hazard.HAZARD_CATEGORIES]
+        all_category_values = [value for value, _ in Hazard.HAZARD_CATEGORIES]
+        all_category_counts = [
+            category_counts.get(category_value, 0)
+            for category_value in all_category_values
+        ]
+        context['all_category_labels'] = json.dumps(all_category_labels)
+        context['all_category_values'] = json.dumps(all_category_values)
+        context['all_category_counts'] = json.dumps(all_category_counts)
+
+        category_status_counts = {
+            status_key: {category_value: 0 for category_value in all_category_values}
+            for status_key, _ in HAZARD_STATUS_FILTER_CHOICES
+        }
+        for hazard in filtered_hazards.prefetch_related('action_items'):
+            status_key = hazard.effective_status
+            if status_key not in category_status_counts:
+                status_key = 'REPORTED'
+            category_status_counts[status_key][hazard.hazard_category] += 1
+
+        context['all_category_status_keys'] = json.dumps([key for key, _ in HAZARD_STATUS_FILTER_CHOICES])
+        context['all_category_status_labels'] = json.dumps([label for _, label in HAZARD_STATUS_FILTER_CHOICES])
+        context['all_category_status_data'] = json.dumps({
+            status_key: [category_status_counts[status_key].get(category_value, 0) for category_value in all_category_values]
+            for status_key, _ in HAZARD_STATUS_FILTER_CHOICES
+        })
+
         # ... (Monthly Trend, Severity, and Status charts ka code waise hi rahega) ...
         # Monthly Trend ...
         six_months_ago = today - datetime.timedelta(days=180)
@@ -1362,6 +1412,24 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['status_labels'] = json.dumps(status_labels)
         context['status_keys'] = json.dumps(status_keys)
         context['status_data'] = json.dumps(status_data)
+
+        dashboard_status_labels = [label for _, label in HAZARD_STATUS_FILTER_CHOICES]
+        dashboard_status_keys = [key for key, _ in HAZARD_STATUS_FILTER_CHOICES]
+        dashboard_status_counts = {key: 0 for key in dashboard_status_keys}
+
+        for hazard in filtered_hazards.prefetch_related('action_items'):
+            hazard_status = hazard.effective_status
+            if hazard_status not in dashboard_status_counts:
+                hazard_status = 'REPORTED'
+            dashboard_status_counts[hazard_status] += 1
+
+        dashboard_status_data = [dashboard_status_counts.get(key, 0) for key in dashboard_status_keys]
+        context['status_labels'] = json.dumps(dashboard_status_labels)
+        context['status_keys'] = json.dumps(dashboard_status_keys)
+        context['status_data'] = json.dumps(dashboard_status_data)
+        context['all_status_labels'] = json.dumps(dashboard_status_labels)
+        context['all_status_keys'] = json.dumps(dashboard_status_keys)
+        context['all_status_data'] = json.dumps(dashboard_status_data)
         
         department_map = {}
         for hazard in hazards_qs:
@@ -1383,13 +1451,18 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
                             'closed_count': 0,
                             'overdue_count': 0,
                             'critical_count': 0,
+                            'status_counts': {key: 0 for key in dashboard_status_keys},
                         }
 
                     row = department_map[department_key]
                     row['total'] += 1
-                    if hazard.status == 'CLOSED':
+                    hazard_status = hazard.effective_status
+                    if hazard_status not in row['status_counts']:
+                        hazard_status = 'REPORTED'
+                    row['status_counts'][hazard_status] += 1
+                    if hazard_status == 'CLOSED':
                         row['closed_count'] += 1
-                    elif hazard.action_deadline and hazard.action_deadline < today:
+                    elif hazard_status == 'OVERDUE':
                         row['overdue_count'] += 1
                     if hazard.severity == 'critical':
                         row['critical_count'] += 1
@@ -1403,13 +1476,18 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
                         'closed_count': 0,
                         'overdue_count': 0,
                         'critical_count': 0,
+                        'status_counts': {key: 0 for key in dashboard_status_keys},
                     }
 
                 row = department_map[department_key]
                 row['total'] += 1
-                if hazard.status == 'CLOSED':
+                hazard_status = hazard.effective_status
+                if hazard_status not in row['status_counts']:
+                    hazard_status = 'REPORTED'
+                row['status_counts'][hazard_status] += 1
+                if hazard_status == 'CLOSED':
                     row['closed_count'] += 1
-                elif hazard.action_deadline and hazard.action_deadline < today:
+                elif hazard_status == 'OVERDUE':
                     row['overdue_count'] += 1
                 if hazard.severity == 'critical':
                     row['critical_count'] += 1
@@ -1419,8 +1497,19 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             key=lambda item: (-item['total'], item['name'])
         )
 
+        department_reported_data = []
+        department_action_assigned_data = []
+        department_closed_late_data = []
         for item in department_distribution:
-            item['open_count'] = item['total'] - item['closed_count']
+            item['reported_count'] = item['status_counts'].get('REPORTED', 0)
+            item['action_assigned_count'] = item['status_counts'].get('ACTION_ASSIGNED', 0)
+            item['closed_count'] = item['status_counts'].get('CLOSED', 0)
+            item['overdue_count'] = item['status_counts'].get('OVERDUE', 0)
+            item['closed_late_count'] = item['status_counts'].get('CLOSED_LATE', 0)
+            item['open_count'] = item['total'] - item['closed_count'] - item['closed_late_count']
+            department_reported_data.append(item['reported_count'])
+            department_action_assigned_data.append(item['action_assigned_count'])
+            department_closed_late_data.append(item['closed_late_count'])
 
         department_ids = [item['assigned_department_id'] for item in department_distribution]
         department_labels = [item['name'] for item in department_distribution]
@@ -1433,6 +1522,9 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         context['department_ids'] = json.dumps(department_ids)
         context['department_labels'] = json.dumps(department_labels)
+        context['department_reported_data'] = json.dumps(department_reported_data)
+        context['department_action_assigned_data'] = json.dumps(department_action_assigned_data)
+        context['department_closed_late_data'] = json.dumps(department_closed_late_data)
         context['department_total_data'] = json.dumps(department_total_data)
         context['department_open_data'] = json.dumps(department_open_data)
         context['department_closed_data'] = json.dumps(department_closed_data)
@@ -1461,12 +1553,11 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
                 plant_summary_map[plant_key] = {
                     'plant_id': plant_obj.id if plant_obj else '',
                     'plant_name': plant_name,
+                    'reported_count': 0,
+                    'action_assigned_count': 0,
                     'closed_count': 0,
-                    'pending_count': 0,
-                    'in_progress_count': 0,
-                    'cancelled_count': 0,
                     'overdue_count': 0,
-                    'late_close_count': 0,
+                    'closed_late_count': 0,
                     'total': 0,
                 }
 
@@ -1474,18 +1565,19 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
             row['total'] += 1
 
             effective_status = hazard.effective_status
-            if effective_status == 'CLOSED_LATE':
-                row['late_close_count'] += 1
-            elif effective_status == 'OVERDUE':
-                row['overdue_count'] += 1
+            if effective_status not in {'REPORTED', 'ACTION_ASSIGNED', 'CLOSED', 'OVERDUE', 'CLOSED_LATE'}:
+                effective_status = 'REPORTED'
+
+            if effective_status == 'REPORTED':
+                row['reported_count'] += 1
+            elif effective_status == 'ACTION_ASSIGNED':
+                row['action_assigned_count'] += 1
             elif effective_status == 'CLOSED':
                 row['closed_count'] += 1
-            elif effective_status == 'IN_PROGRESS':
-                row['in_progress_count'] += 1
-            elif effective_status == 'REJECTED':
-                row['cancelled_count'] += 1
+            elif effective_status == 'OVERDUE':
+                row['overdue_count'] += 1
             else:
-                row['pending_count'] += 1
+                row['closed_late_count'] += 1
 
         plant_summary = sorted(
             plant_summary_map.values(),
@@ -1496,28 +1588,27 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         plant_status_rows = []
         for item in plant_summary:
             total_count = item['total'] or 0
-            closed_percent = round((item['closed_count'] / total_count) * 100) if total_count else 0
+            closed_total = (item['closed_count'] or 0) + (item['closed_late_count'] or 0)
+            closed_percent = round((closed_total / total_count) * 100) if total_count else 0
             plant_status_rows.append({
                 'plant_id': item['plant_id'],
                 'plant_name': item['plant_name'],
+                'reported_count': item['reported_count'],
+                'action_assigned_count': item['action_assigned_count'],
                 'closed_count': item['closed_count'],
-                'pending_count': item['pending_count'],
-                'in_progress_count': item['in_progress_count'],
-                'cancelled_count': item['cancelled_count'],
                 'overdue_count': item['overdue_count'],
-                'late_close_count': item['late_close_count'],
+                'closed_late_count': item['closed_late_count'],
                 'total': total_count,
                 'closed_percent': closed_percent,
             })
 
         context['plant_chart_labels'] = json.dumps([item['plant_name'] for item in plant_summary])
         context['plant_chart_ids'] = json.dumps([item['plant_id'] for item in plant_summary])
+        context['plant_reported_data'] = json.dumps([item['reported_count'] for item in plant_summary])
+        context['plant_action_assigned_data'] = json.dumps([item['action_assigned_count'] for item in plant_summary])
         context['plant_closed_data'] = json.dumps([item['closed_count'] for item in plant_summary])
-        context['plant_pending_data'] = json.dumps([item['pending_count'] for item in plant_summary])
-        context['plant_in_progress_data'] = json.dumps([item['in_progress_count'] for item in plant_summary])
-        context['plant_cancelled_data'] = json.dumps([item['cancelled_count'] for item in plant_summary])
         context['plant_overdue_data'] = json.dumps([item['overdue_count'] for item in plant_summary])
-        context['plant_late_close_data'] = json.dumps([item['late_close_count'] for item in plant_summary])
+        context['plant_closed_late_data'] = json.dumps([item['closed_late_count'] for item in plant_summary])
         context['plant_chart_data'] = bool(plant_summary)
         context['plant_status_rows'] = plant_status_rows
         context['plant_summary'] = {
@@ -1558,13 +1649,12 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         overdue_department_map = {}
 
-        overdue_hazards = filtered_hazards.filter(
-            action_deadline__lt=today
-        ).exclude(
-            status='CLOSED'
-        )
+        overdue_hazards = filtered_hazards.prefetch_related('action_items')
 
         for hazard in overdue_hazards:
+
+            if hazard.effective_status != 'OVERDUE':
+                continue
 
             assigned_users = hazard.get_assigned_users()
 
