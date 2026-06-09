@@ -21,20 +21,7 @@ class IncidentType(models.Model):
         verbose_name_plural='Incident Types'
     def __str__(self):
         return f"{self.name}({self.code})"
-class Incident(models.Model):
-    """
-    Incident/Accident Reporting Model
-    Types: LTI (Lost Time Injury), MTC/RWC (Medical Treatment Case), 
-           FA (First Aid), HLFI (High Lost Frequency Injury), FATALITY
-    """
-    
-    # INCIDENT_TYPES = [
-    #     ('LTI', 'Lost Time Injury (LTI)'),
-    #     ('MTC', 'Medical Treatment Case (MTC/RWC)'),
-    #     ('FA', 'First Aid (FA)'),
-    #     ('HLFI', 'High Lost Frequency Injury (HLFI)'),
-    #     ('FATALITY', 'Fatality'),
-    # ]
+
     
 class Incident(models.Model):
     
