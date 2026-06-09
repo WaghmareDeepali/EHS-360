@@ -47,27 +47,40 @@ def _build_scope_queryset(schedule_queryset, user_queryset, primary_id=None, chi
 
 def _get_inspection_scope(schedule, user=None):
     plants = schedule.plants.filter(is_active=True).order_by('name').distinct()
-    user_plant_ids = []
 
     if user is not None:
-        user_plant_ids = [plant.id for plant in user.get_all_plants() if getattr(plant, 'is_active', True)]
+        user_plant_ids = [
+            plant.id
+            for plant in user.get_all_plants()
+            if getattr(plant, 'is_active', True)
+        ]
+
         if user_plant_ids:
             plants = plants.filter(id__in=user_plant_ids)
 
-    zones = schedule.zones.filter(is_active=True)
-    if not zones.exists() and plants.exists():
-        zones = Zone.objects.filter(plant__in=plants, is_active=True)
-    zones = zones.order_by('name').distinct()
+    # =========================
+    # DYNAMIC ASSIGNMENT
+    # =========================
 
-    locations = schedule.locations.filter(is_active=True)
-    if not locations.exists() and zones.exists():
-        locations = Location.objects.filter(zone__in=zones, is_active=True)
-    locations = locations.order_by('name').distinct()
+    if schedule.is_dynamic_area_assignment:
 
-    sublocations = schedule.sublocations.filter(is_active=True)
-    if not sublocations.exists() and locations.exists():
-        sublocations = SubLocation.objects.filter(location__in=locations, is_active=True)
-    sublocations = sublocations.order_by('name').distinct()
+        zones = Zone.objects.filter(plant__in=plants,is_active=True).order_by('name').distinct()
+
+        locations = Location.objects.filter(zone__in=zones,is_active=True).order_by('name').distinct()
+
+        sublocations = SubLocation.objects.filter(location__in=locations,is_active=True).order_by('name').distinct()
+
+    # =========================
+    # FIXED ASSIGNMENT
+    # =========================
+
+    else:
+
+        zones = schedule.zones.filter(is_active=True).order_by('name').distinct()
+
+        locations = schedule.locations.filter(is_active=True).order_by('name').distinct()
+
+        sublocations = schedule.sublocations.filter(is_active=True).order_by('name').distinct()
 
     return {
         'plants': plants,
@@ -75,6 +88,7 @@ def _get_inspection_scope(schedule, user=None):
         'locations': locations,
         'sublocations': sublocations,
     }
+
 
 
 def _clone_schedule_as_scheduled(source_schedule, assignment_notes=None):
@@ -1548,12 +1562,30 @@ def _build_inspection_form_context(
 
     selected_scope = _get_selected_scope_ids(active_source or {}, inspection_scope)
     if not active_source:
-        selected_scope = {
-            'selected_plant_ids': list(available_plants.values_list('id', flat=True)),
-            'selected_zone_ids': list(available_zones.values_list('id', flat=True)),
-            'selected_location_ids': list(available_locations.values_list('id', flat=True)),
-            'selected_sublocation_ids': list(available_sublocations.values_list('id', flat=True)),
-        }
+        if schedule.is_dynamic_area_assignment:
+            selected_scope = {
+                'selected_plant_ids': list(
+                    available_plants.values_list('id', flat=True)
+                ),
+                'selected_zone_ids': [],
+                'selected_location_ids': [],
+                'selected_sublocation_ids': [],
+            }
+        else:
+            selected_scope = {
+                'selected_plant_ids': list(
+                    available_plants.values_list('id', flat=True)
+                ),
+                'selected_zone_ids': list(
+                    available_zones.values_list('id', flat=True)
+                ),
+                'selected_location_ids': list(
+                    available_locations.values_list('id', flat=True)
+                ),
+                'selected_sublocation_ids': list(
+                    available_sublocations.values_list('id', flat=True)
+                ),
+            }
 
     answers_by_question = (active_source or {}).get('answers', {})
     remarks_by_question = (active_source or {}).get('remarks', {})

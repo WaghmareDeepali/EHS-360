@@ -195,6 +195,7 @@
         </div>
     </div>
 
+    {% if schedule.is_dynamic_area_assignment %}
     <div class="card mb-3">
         <div class="card-header" style="background: linear-gradient(135deg, #0f766e, #0ea5e9); color: white;">
             <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Inspection Scope</h5>
@@ -281,6 +282,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
     
     <!-- Questions by Category -->
     {% for category, questions in questions_by_category.items %}
@@ -884,7 +886,10 @@ function loadSublocationsForLocations() {
 }
 
 $(document).ready(function() {
-    loadPlants();
+
+    {% if schedule.is_dynamic_area_assignment %}
+        loadPlants();
+    {% endif %}
 
     // Auto-resize textareas
     $('textarea').each(function() {
@@ -944,22 +949,32 @@ $(document).ready(function() {
         $('[name^="question_"], [name^="remarks_"]').removeClass('is-invalid');
         $('[data-question-group]').removeClass('border border-danger rounded p-2');
 
-        if (!document.querySelectorAll('.plant-checkbox:checked').length) {
-            setScopeError('plants', 'Please select at least one plant.');
-            hasErrors = true;
-        }
-        if (document.querySelectorAll('.zone-checkbox').length && !document.querySelectorAll('.zone-checkbox:checked').length) {
-            setScopeError('zones', 'Please select at least one zone.');
-            hasErrors = true;
-        }
-        if (document.querySelectorAll('.location-checkbox').length && !document.querySelectorAll('.location-checkbox:checked').length) {
-            setScopeError('locations', 'Please select at least one location.');
-            hasErrors = true;
-        }
-        if (document.querySelectorAll('.sublocation-checkbox').length && !document.querySelectorAll('.sublocation-checkbox:checked').length) {
-            setScopeError('sublocations', 'Please select at least one sub-location.');
-            hasErrors = true;
-        }
+        {% if schedule.is_dynamic_area_assignment %}
+
+            if (!document.querySelectorAll('.plant-checkbox:checked').length) {
+                setScopeError('plants', 'Please select at least one plant.');
+                hasErrors = true;
+            }
+
+            if (document.querySelectorAll('.zone-checkbox').length &&
+                !document.querySelectorAll('.zone-checkbox:checked').length) {
+                setScopeError('zones', 'Please select at least one zone.');
+                hasErrors = true;
+            }
+
+            if (document.querySelectorAll('.location-checkbox').length &&
+                !document.querySelectorAll('.location-checkbox:checked').length) {
+                setScopeError('locations', 'Please select at least one location.');
+                hasErrors = true;
+            }
+
+            if (document.querySelectorAll('.sublocation-checkbox').length &&
+                !document.querySelectorAll('.sublocation-checkbox:checked').length) {
+                setScopeError('sublocations', 'Please select at least one sub-location.');
+                hasErrors = true;
+            }
+
+        {% endif %}
 
         {% for category, questions in questions_by_category.items %}
             {% for tq in questions %}

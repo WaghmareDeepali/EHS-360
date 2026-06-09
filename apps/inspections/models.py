@@ -567,6 +567,21 @@ class InspectionSchedule(models.Model):
             new_num = 1
         
         return f"INSP-{date_str}-{new_num:04d}"
+
+    @property
+    def is_dynamic_area_assignment(self):
+        """
+        Admin selected only Plant.
+        User must choose Zone/Location/SubLocation
+        during inspection.
+        """
+
+        return (
+            self.plants.exists()
+            and not self.zones.exists()
+            and not self.locations.exists()
+            and not self.sublocations.exists()
+        )
     
     @property
     def is_overdue(self):
