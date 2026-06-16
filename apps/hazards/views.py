@@ -1413,14 +1413,59 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['status_keys'] = json.dumps(status_keys)
         context['status_data'] = json.dumps(status_data)
 
-        dashboard_status_labels = [label for _, label in HAZARD_STATUS_FILTER_CHOICES]
-        dashboard_status_keys = [key for key, _ in HAZARD_STATUS_FILTER_CHOICES]
-        dashboard_status_counts = {key: 0 for key in dashboard_status_keys}
+        # dashboard_status_labels = [label for _, label in HAZARD_STATUS_FILTER_CHOICES]
+        # dashboard_status_labels = [
+        #     'Un-Reported' if key == 'REPORTED' else label
+        #     for key, label in HAZARD_STATUS_FILTER_CHOICES
+        # ]
+        # dashboard_status_keys = [key for key, _ in HAZARD_STATUS_FILTER_CHOICES]
+        # dashboard_status_counts = {key: 0 for key in dashboard_status_keys}
+
+        dashboard_status_labels = [
+            'Reported',
+            'Un-Reported',
+            'Action Assigned',
+            'Closed',
+            'Overdue',
+            'Closed Late'
+        ]
+
+        dashboard_status_keys = [
+            'TOTAL',
+            'REPORTED',
+            'ACTION_ASSIGNED',
+            'CLOSED',
+            'OVERDUE',
+            'CLOSED_LATE'
+        ]
+
+        dashboard_status_counts = {
+            'TOTAL': 0 if selected_status else filtered_hazards.count(),
+            'REPORTED': 0,
+            'ACTION_ASSIGNED': 0,
+            'CLOSED': 0,
+            'OVERDUE': 0,
+            'CLOSED_LATE': 0
+        }
+
+        # for hazard in filtered_hazards.prefetch_related('action_items'):
+        #     hazard_status = hazard.effective_status
+        #     if hazard_status not in dashboard_status_counts:
+        #         hazard_status = 'REPORTED'
+        #     dashboard_status_counts[hazard_status] += 1
 
         for hazard in filtered_hazards.prefetch_related('action_items'):
             hazard_status = hazard.effective_status
-            if hazard_status not in dashboard_status_counts:
+
+            if hazard_status not in [
+                'REPORTED',
+                'ACTION_ASSIGNED',
+                'CLOSED',
+                'OVERDUE',
+                'CLOSED_LATE'
+            ]:
                 hazard_status = 'REPORTED'
+
             dashboard_status_counts[hazard_status] += 1
 
         dashboard_status_data = [dashboard_status_counts.get(key, 0) for key in dashboard_status_keys]
@@ -1608,6 +1653,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
         context['plant_action_assigned_data'] = json.dumps([item['action_assigned_count'] for item in plant_summary])
         context['plant_closed_data'] = json.dumps([item['closed_count'] for item in plant_summary])
         context['plant_overdue_data'] = json.dumps([item['overdue_count'] for item in plant_summary])
+        context['plant_total_data'] = json.dumps([item['total'] for item in plant_summary])
         context['plant_closed_late_data'] = json.dumps([item['closed_late_count'] for item in plant_summary])
         context['plant_chart_data'] = bool(plant_summary)
         context['plant_status_rows'] = plant_status_rows
