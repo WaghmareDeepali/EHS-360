@@ -1871,7 +1871,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
         # --- Headers ---
         headers = [
             'Report Number', 'Title', 'Type', 'Category', 'Severity', 'Status',
-            'Incident Datetime', 'Reported By', 'Department', 'Reported Date', 'Plant', 'Zone',
+            'Incident Datetime', 'Reported By', 'Assigned To', 'Department', 'Reported Date', 'Plant', 'Zone',
             'Location', 'Sub-Location', 'Description', 'Action Deadline'
         ]
         sheet.append(headers)
@@ -1895,6 +1895,14 @@ class ExportHazardsView(LoginRequiredMixin, View):
             reported_by_display = reporter_name if reporter_name else 'N/A'
             department_display = assigned_department or reporter_department or 'N/A'
 
+            assigned_users = []
+            for action_item in hazard.action_items.all():
+                for user in action_item.get_responsible_users():
+                    name = user.get_full_name().strip() or user.username
+                    if name not in assigned_users:
+                        assigned_users.append(name)
+            assigned_to_display = ", ".join(assigned_users) if assigned_users else "Not Assigned"
+
             row_data = [
                 hazard.report_number or '',
                 hazard.hazard_title or '',
@@ -1904,6 +1912,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
                 hazard.effective_status_display if hazard.status else '',
                 hazard.incident_datetime.strftime('%Y-%m-%d %H:%M') if hazard.incident_datetime else '',
                 reported_by_display,
+                assigned_to_display,
                 department_display,
                 hazard.created_at.strftime('%Y-%m-%d') if hazard.created_at else '',
                 hazard.plant.name if hazard.plant else 'N/A',
