@@ -220,8 +220,8 @@
                                         {% endif %}
                                         {% endif %}
 
-                                        <a href="{% url 'inspections:schedule_clone' schedule.pk %}" class="btn btn-sm btn-secondary" title="Clone">
-                                            <i class="fas fa-clone"></i>
+                                        <!-- <a href="{% url 'inspections:schedule_clone' schedule.pk %}" class="btn btn-sm btn-secondary" title="Clone">
+                                            <i class="fas fa-clone"></i> -->
                                         </a>
                                         {% if schedule.status == 'OVERDUE' %}
                                         <a href="{% url 'inspections:schedule_restart' schedule.pk %}" class="btn btn-sm btn-danger" title="Restart">

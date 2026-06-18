@@ -1284,6 +1284,49 @@ def get_users_by_plants(request):
 
 
 @login_required
+def get_users_by_role(request):
+    """AJAX: Get users for the selected role, optionally filtered by plant ids."""
+    role_name = request.GET.get('role', '').strip()
+    if not role_name:
+        return JsonResponse({'users': []})
+
+    role_map = {
+        'Admin': 'ADMIN',
+        'Hod': 'HOD',
+        'Safety Manager': 'SAFETY MANAGER',
+        'Plant Head': 'PLANT HEAD',
+    }
+    normalized_role = role_map.get(role_name, role_name.upper())
+
+    plant_ids = request.GET.get('plant_ids', '').strip()
+
+    users_qs = User.objects.filter(
+        role__name=normalized_role,
+        is_active_employee=True,
+        is_active=True
+    )
+
+    if plant_ids:
+        ids = [pid.strip() for pid in plant_ids.split(',') if pid.strip()]
+        users_qs = users_qs.filter(plant__id__in=ids)
+
+    users = users_qs.select_related('plant', 'role', 'department').order_by('first_name')
+
+    users_data = []
+    for u in users:
+        users_data.append({
+            'id': u.id,
+            'full_name': u.get_full_name(),
+            'role': u.role.name if u.role else '',
+            'department': u.department.name if u.department else '',
+            'plant_name': u.plant.name if u.plant else '',
+            'plant_id': u.plant.id if u.plant else None,
+        })
+
+    return JsonResponse({'users': users_data})
+
+
+@login_required
 def autoschedule_toggle(request, config_id):
     """
     Stop / Pause / Resume auto-schedule config.

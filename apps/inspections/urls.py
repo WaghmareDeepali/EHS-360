@@ -70,6 +70,7 @@ urlpatterns = [
 
     # AJAX: Get users by selected plants
     path('ajax/get-users-by-plants/', views.get_users_by_plants, name='get_users_by_plants'),
+    path('ajax/get-users-by-role/', views.get_users_by_role, name='get_users_by_role'),
     # AJAX Endpoints
 
     path('ajax/get-zones/', views.get_zones_by_plant, name='get_zones_by_plant'),
