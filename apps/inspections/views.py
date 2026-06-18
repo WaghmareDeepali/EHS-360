@@ -1346,6 +1346,62 @@ def get_users_by_role(request):
     return JsonResponse({'users': users_data})
 
 
+def get_users_by_roles(request):
+    """AJAX: Get users for multiple selected roles, optionally filtered by plant ids."""
+    roles_param = request.GET.get('roles', '').strip()
+    if not roles_param:
+        return JsonResponse({'users': []})
+
+    # Parse comma-separated roles
+    role_names = [r.strip() for r in roles_param.split(',') if r.strip()]
+    if not role_names:
+        return JsonResponse({'users': []})
+
+    role_map = {
+        'Admin': 'ADMIN',
+        'Hod': 'HOD',
+        'Safety Manager': 'SAFETY MANAGER',
+        'Plant Head': 'PLANT HEAD',
+        'ADMIN': 'ADMIN',
+        'HOD': 'HOD',
+        'SAFETY MANAGER': 'SAFETY MANAGER',
+        'PLANT HEAD': 'PLANT HEAD',
+    }
+    
+    normalized_roles = []
+    for role_name in role_names:
+        normalized = role_map.get(role_name, role_name.upper())
+        if normalized not in normalized_roles:
+            normalized_roles.append(normalized)
+
+    plant_ids = request.GET.get('plant_ids', '').strip()
+
+    users_qs = User.objects.filter(
+        role__name__in=normalized_roles,
+        is_active_employee=True,
+        is_active=True
+    )
+
+    if plant_ids:
+        ids = [pid.strip() for pid in plant_ids.split(',') if pid.strip()]
+        users_qs = users_qs.filter(plant__id__in=ids)
+
+    users = users_qs.select_related('plant', 'role', 'department').order_by('first_name').distinct()
+
+    users_data = []
+    for u in users:
+        users_data.append({
+            'id': u.id,
+            'full_name': u.get_full_name(),
+            'role': u.role.name if u.role else '',
+            'department': u.department.name if u.department else '',
+            'plant_name': u.plant.name if u.plant else '',
+            'plant_id': u.plant.id if u.plant else None,
+        })
+
+    return JsonResponse({'users': users_data})
+
+
 @login_required
 def autoschedule_toggle(request, config_id):
     """
@@ -1744,6 +1800,12 @@ def inspection_submit(request, schedule_id):
         selected_zone_ids = selected_scope['selected_zone_ids']
         selected_location_ids = selected_scope['selected_location_ids']
         selected_sublocation_ids = selected_scope['selected_sublocation_ids']
+
+        if not schedule.is_dynamic_area_assignment:
+            selected_plant_ids = selected_plant_ids or list(available_plants.values_list('id', flat=True))
+            selected_zone_ids = selected_zone_ids or list(available_zones.values_list('id', flat=True))
+            selected_location_ids = selected_location_ids or list(available_locations.values_list('id', flat=True))
+            selected_sublocation_ids = selected_sublocation_ids or list(available_sublocations.values_list('id', flat=True))
 
         action = request.POST.get('form_action', 'submit')
 
