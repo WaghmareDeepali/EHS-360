@@ -860,6 +860,9 @@ def schedule_list(request):
     plant_id = request.GET.get('plant')
     assigned_to_id = request.GET.get('assigned_to')
     search = request.GET.get('search')
+    template_id = request.GET.get('template')
+    from_date = request.GET.get('from_date')
+    to_date = request.GET.get('to_date')
     
     if status:
         schedules = schedules.filter(status=status)
@@ -877,6 +880,15 @@ def schedule_list(request):
             Q(assigned_users__first_name__icontains=search) |
             Q(assigned_users__last_name__icontains=search)
         )
+
+    if template_id:
+        schedules = schedules.filter(template_id=template_id)
+
+    if from_date:
+        schedules = schedules.filter(scheduled_date__gte=from_date)
+
+    if to_date:
+        schedules = schedules.filter(scheduled_date__lte=to_date)
     
     schedules = schedules.distinct().order_by('-created_at')
     
@@ -894,15 +906,23 @@ def schedule_list(request):
         role__name__in=['HOD', 'SAFETY MANAGER'],
         is_active_employee=True
     ).order_by('first_name', 'last_name')
+
+    from apps.inspections.models import InspectionTemplate
+
+    templates = InspectionTemplate.objects.filter(is_active=True).order_by('template_name')
     
     context = {
         'page_obj': page_obj,
         'status_choices': InspectionSchedule.STATUS_CHOICES,
         'plants': plants,
         'hods': hods,
+        'templates': templates,
         'selected_status': status,
         'selected_plant': plant_id,
         'selected_hod': assigned_to_id,
+        'selected_template': template_id,
+        'from_date': from_date,
+        'to_date': to_date,
         'search': search,
         'querystring': querydict.urlencode(),
     }
