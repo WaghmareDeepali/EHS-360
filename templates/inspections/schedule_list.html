@@ -91,13 +91,14 @@
             <div class="card-body">
                 <form method="get">
                     <div class="row align-items-end">
-                        <div class="col-md-2">
-                            <label class="form-label">Status</label>
-                            <select name="status" class="form-control">
-                                <option value="">All Status</option>
-                                {% for value, label in status_choices %}
-                                <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
-                                    {{ label }}
+                        <div class="col-md-3">
+                            <label class="form-label">Template</label>
+                            <select name="template" class="form-control">
+                                <option value="">All Templates</option>
+                                {% for template in templates %}
+                                <option value="{{ template.id }}"
+                                    {% if selected_template == template.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ template.template_name }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -124,9 +125,28 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-control">
+                                <option value="">All Status</option>
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mt-2">
                             <label class="form-label">Search</label>
                             <input type="text" name="search" class="form-control" placeholder="Search..." {% if search %}value="{{ search }}"{% else %}value=""{% endif %}>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">From Date</label>
+                            <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">To Date</label>
+                            <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
                         </div>
                         <div class="col-md-1">
                             <button type="submit" class="btn btn-primary w-100">
