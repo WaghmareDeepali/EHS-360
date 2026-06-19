@@ -891,13 +891,63 @@ def schedule_list(request):
         schedules = schedules.filter(scheduled_date__lte=to_date)
     
     schedules = schedules.distinct().order_by('-created_at')
+
+    from collections import defaultdict
+
+    inspection_summary = {}
+
+    for schedule in schedules:
+
+        template_name = schedule.template.template_name
+
+        if template_name not in inspection_summary:
+            inspection_summary[template_name] = {
+                'template': template_name,
+                'assigned_to': set(),
+                'plants': set(),
+                'scheduled_date': schedule.scheduled_date,
+                'end_date': schedule.scheduled_end_date,
+            }
+
+        inspection_summary[template_name]['assigned_to'].add(
+            schedule.assigned_to.get_full_name()
+        )
+
+        for plant in schedule.plants.all():
+            inspection_summary[template_name]['plants'].add(
+                plant.name
+            )
+
+        # Latest end date
+        if schedule.scheduled_end_date:
+            current_end = inspection_summary[template_name]['end_date']
+
+            if not current_end or schedule.scheduled_end_date > current_end:
+                inspection_summary[template_name]['end_date'] = schedule.scheduled_end_date
+
+
+    inspection_summary = [
+        {
+            'template': data['template'],
+            'assigned_to': ', '.join(sorted(data['assigned_to'])),
+            'plants': ', '.join(sorted(data['plants'])),
+            'scheduled_date': data['scheduled_date'],
+            'end_date': data['end_date'],
+        }
+        for data in inspection_summary.values()
+    ]
+
+    summary_paginator = Paginator(inspection_summary,5)
+    summary_page_number = request.GET.get('summary_page')
+    summary_page_obj = summary_paginator.get_page(summary_page_number)
     
-    paginator = Paginator(schedules, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    schedule_paginator = Paginator(schedules, 20)
+    schedule_page_number = request.GET.get('schedule_page')
+    page_obj = schedule_paginator.get_page(schedule_page_number)
 
     querydict = request.GET.copy()
-    querydict.pop('page', None)
+    querydict.pop('summary_page', None)
+    querydict.pop('schedule_page', None)
 
     from apps.organizations.models import Plant
     plants = Plant.objects.filter(is_active=True)
@@ -912,6 +962,7 @@ def schedule_list(request):
     templates = InspectionTemplate.objects.filter(is_active=True).order_by('template_name')
     
     context = {
+        'summary_page_obj': summary_page_obj,
         'page_obj': page_obj,
         'status_choices': InspectionSchedule.STATUS_CHOICES,
         'plants': plants,
@@ -925,6 +976,7 @@ def schedule_list(request):
         'to_date': to_date,
         'search': search,
         'querystring': querydict.urlencode(),
+        'inspection_summary': inspection_summary,
     }
     return render(request, 'inspections/schedule_list.html', context)
 

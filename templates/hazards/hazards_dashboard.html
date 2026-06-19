@@ -386,7 +386,7 @@
                      <option value="{{ status_value }}"
                         {% if selected_status == status_value %}selected{% endif %}>
                         {% if status_value == 'REPORTED' %}
-                            Un-Reported
+                            Un-Assigned
                         {% else %}
                             {{ status_label }}
                         {% endif %}
@@ -413,7 +413,7 @@
                 {% if selected_month_label %}<span class="active-filter-badge">Month: {{ selected_month_label }}<i class="fas fa-times" onclick="removeFilter('month')"></i></span>{% endif %}
                 {% if selected_severity %}<span class="active-filter-badge">Risk: {{ selected_severity|capfirst }}<i class="fas fa-times" onclick="removeFilter('severity')"></i></span>{% endif %}
                 <!-- {% if selected_status %}<span class="active-filter-badge">Status: {{ selected_status_label|default:selected_status }}<i class="fas fa-times" onclick="removeFilter('status')"></i></span>{% endif %} -->
-                {% if selected_status %}<span class="active-filter-badge">Status:{% if selected_status == 'REPORTED' %}Un-Reported{% elif selected_status == 'ACTION_ASSIGNED' %}Action Assigned{% elif selected_status == 'CLOSED' %}Closed{% elif selected_status == 'OVERDUE' %}Overdue{% elif selected_status == 'CLOSED_LATE' %}Closed Late{% endif %}
+                {% if selected_status %}<span class="active-filter-badge">Status:{% if selected_status == 'REPORTED' %}Un-Assigned{% elif selected_status == 'ACTION_ASSIGNED' %}Action Assigned{% elif selected_status == 'CLOSED' %}Closed{% elif selected_status == 'OVERDUE' %}Overdue{% elif selected_status == 'CLOSED_LATE' %}Closed Late{% endif %}
                     <i class="fas fa-times" onclick="removeFilter('status')"></i>
                 </span>
                 {% endif %}
@@ -669,7 +669,7 @@
                                 <span class="eyebrow">Assigned Department Hazard Tracker</span>
                             </div>
                             <div class="d-flex align-items-center flex-wrap">
-                                <span class="metric-pill metric-reported mr-2 mb-1">Un-Reported</span>
+                                <span class="metric-pill metric-reported mr-2 mb-1">Un-Assigned</span>
                                 <span class="metric-pill metric-assigned mr-2 mb-1">Action Assigned</span>
                                 <span class="metric-pill metric-closed mb-1">Closed</span>
                                 <span class="metric-pill metric-overdue mb-1">Overdue</span>
@@ -719,7 +719,7 @@
                                     <tr>
                                         <th>Plant</th>
                                         <th class="status-total">Reported</th>
-                                        <th class="status-reported">Un-Reported</th>
+                                        <th class="status-reported">Un-Assigned</th>
                                         <th class="status-assigned">Action Assigned</th>
                                         <th class="status-closed">Closed</th>
                                         <th class="status-overdue">Overdue</th>
@@ -1238,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 {% endif %}
                 {
-                    label: 'Un-Reported',
+                    label: 'Un-Assigned',
                     data: categoryStatusData.REPORTED,
                     backgroundColor: '#6c757d',
                     borderRadius: 8,
@@ -1368,7 +1368,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 {% endif %}
                 {
-                    label: 'Un-Reported',
+                    label: 'Un-Assigned',
                     data: {{ department_reported_data|safe }},
                     backgroundColor: '#6c757d',
                     barPercentage: 0.56,
@@ -1529,7 +1529,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 {% endif %}
                 {
-                    label: 'Un-Reported',
+                    label: 'Un-Assigned',
                     data: {{ plant_reported_data|safe }},
                     backgroundColor: chartColors.reported,
                     borderColor: chartColors.reported,

@@ -1423,7 +1423,7 @@ class HazardDashboardViews(LoginRequiredMixin, TemplateView):
 
         dashboard_status_labels = [
             'Reported',
-            'Un-Reported',
+            'Un-Assigned',
             'Action Assigned',
             'Closed',
             'Overdue',
@@ -1871,7 +1871,7 @@ class ExportHazardsView(LoginRequiredMixin, View):
         # --- Headers ---
         headers = [
             'Report Number', 'Title', 'Type', 'Category', 'Severity', 'Status',
-            'Incident Datetime', 'Reported By', 'Assigned To', 'Department', 'Reported Date', 'Plant', 'Zone',
+            'Incident Datetime', 'Reported By', 'Reported By Department', 'Assigned To', 'Assigned To Department', 'Reported Date', 'Plant', 'Zone',
             'Location', 'Sub-Location', 'Description', 'Action Deadline'
         ]
         sheet.append(headers)
@@ -1890,10 +1890,18 @@ class ExportHazardsView(LoginRequiredMixin, View):
                 reporter_name = reporter.username or reporter.email or 'N/A'
 
             assigned_user = getattr(hazard, 'assigned_to', None)
-            assigned_department = getattr(getattr(assigned_user, 'department', None), 'name', '')
-            reporter_department = getattr(getattr(reporter, 'department', None), 'name', 'N/A')
             reported_by_display = reporter_name if reporter_name else 'N/A'
-            department_display = assigned_department or reporter_department or 'N/A'
+
+            reporter_department = (reporter.department.name if reporter and reporter.department else 'N/A')
+
+            assigned_departments = set()
+
+            for action_item in hazard.action_items.all():
+                for user in action_item.get_responsible_users():
+                    if user.department:
+                        assigned_departments.add(user.department.name)
+
+            assigned_department_display = (", ".join(sorted(assigned_departments)) if assigned_departments else "Not Assigned")
 
             assigned_users = []
             for action_item in hazard.action_items.all():
@@ -1912,8 +1920,9 @@ class ExportHazardsView(LoginRequiredMixin, View):
                 hazard.effective_status_display if hazard.status else '',
                 hazard.incident_datetime.strftime('%Y-%m-%d %H:%M') if hazard.incident_datetime else '',
                 reported_by_display,
+                reporter_department,
                 assigned_to_display,
-                department_display,
+                assigned_department_display,
                 hazard.created_at.strftime('%Y-%m-%d') if hazard.created_at else '',
                 hazard.plant.name if hazard.plant else 'N/A',
                 hazard.zone.name if hazard.zone else 'N/A',
