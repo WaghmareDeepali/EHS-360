@@ -283,6 +283,21 @@
         </div>
     </div>
     {% endif %}
+
+    {% if not schedule.is_dynamic_area_assignment %}
+        {% for plant_id in selected_plant_ids %}
+            <input type="hidden" name="selected_plants" value="{{ plant_id }}">
+        {% endfor %}
+        {% for zone_id in selected_zone_ids %}
+            <input type="hidden" name="selected_zones" value="{{ zone_id }}">
+        {% endfor %}
+        {% for location_id in selected_location_ids %}
+            <input type="hidden" name="selected_locations" value="{{ location_id }}">
+        {% endfor %}
+        {% for sublocation_id in selected_sublocation_ids %}
+            <input type="hidden" name="selected_sublocations" value="{{ sublocation_id }}">
+        {% endfor %}
+    {% endif %}
     
     <!-- Questions by Category -->
     {% for category, questions in questions_by_category.items %}
@@ -928,10 +943,22 @@ $(document).ready(function() {
 
     function setScopeError(key, message) {
         $('#' + key + 'Error').text(message);
+        // Add visual highlight to the grid
+        var gridId = key + 'Grid';
+        var gridEl = document.getElementById(gridId);
+        if (gridEl) {
+            gridEl.classList.add('border', 'border-danger', 'rounded', 'p-2');
+        }
     }
 
     function clearScopeError(key) {
         $('#' + key + 'Error').text('');
+        // Remove visual highlight from the grid
+        var gridId = key + 'Grid';
+        var gridEl = document.getElementById(gridId);
+        if (gridEl) {
+            gridEl.classList.remove('border', 'border-danger', 'rounded', 'p-2');
+        }
     }
 
     $('form').submit(function(e) {

@@ -115,6 +115,16 @@
   .note_text {
     color: #a91422;
   }
+  #roleCheckboxesContainer {
+    display: flex;
+    flex-wrap: wrap; /* remove if you want strictly one line */
+    gap: 20px;
+    align-items: center;
+}
+
+#roleCheckboxesContainer .form-check {
+    margin-bottom: 0;
+}
 </style>
 {% endblock %}
 
@@ -248,6 +258,30 @@
             <small class="form-text text-muted mb-2 d-block">
               Select plants first — shows HODs and Safety Managers from selected plants
             </small>
+            <div class="mb-3">
+              <label>Assign To Roles</label>
+              <div id="roleCheckboxesContainer" class="mb-2">
+                <div class="form-check">
+                  <input class="form-check-input role-checkbox" type="checkbox" name="selected_roles" value="ADMIN" id="role_ADMIN">
+                  <label class="form-check-label" for="role_ADMIN">Admin</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input role-checkbox" type="checkbox" name="selected_roles" value="HOD" id="role_HOD">
+                  <label class="form-check-label" for="role_HOD">Hod</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input role-checkbox" type="checkbox" name="selected_roles" value="SAFETY MANAGER" id="role_SAFETY_MANAGER">
+                  <label class="form-check-label" for="role_SAFETY_MANAGER">Safety Manager</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input role-checkbox" type="checkbox" name="selected_roles" value="PLANT HEAD" id="role_PLANT_HEAD">
+                  <label class="form-check-label" for="role_PLANT_HEAD">Plant Head</label>
+                </div>
+              </div>
+            </div>
+            <div id="roleUsersListForm" class="mb-3" style="display:none;">
+              <div class="text-muted small">Select roles to load users.</div>
+            </div>
 
             <div class="select-all-bar" id="userSelectBar" style="display:none;">
               <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll('user-checkbox', updateUserCount)">
@@ -261,6 +295,8 @@
             <div class="checkbox-grid" id="usersGrid">
               <div class="loading-text">Please select plants first</div>
             </div>
+            <!-- container for hidden inputs created when user badges are selected but checkbox not present -->
+            <div id="generatedHiddenUsers" style="display:none;"></div>
           </div>
 
           <hr>
@@ -890,9 +926,9 @@ function loadPlants() {
             (plant.code ? ' <small class="text-muted">(' + plant.code + ')</small>' : ''),
             'plant-checkbox',
             function () {
-                updatePlantCount();
-                loadZonesForPlants();
-                loadUsersForPlants();
+              updatePlantCount();
+              loadZonesForPlants();
+              handleRoleOrDefaultLoadUsers();
             }
         );
 
@@ -903,7 +939,7 @@ function loadPlants() {
       });
       updatePlantCount();
       loadZonesForPlants();
-        loadUsersForPlants();
+      handleRoleOrDefaultLoadUsers();
     })
     .catch(function () {
       grid.innerHTML = '<div class="loading-text text-danger">Error loading plants</div>';
@@ -1180,6 +1216,15 @@ function resetGrid(gridId, message) {
   document.getElementById(gridId).innerHTML =
     '<div class="loading-text">' + message + '</div>';
 }
+
+function handleRoleOrDefaultLoadUsers() {
+  var selectedRoles = getSelectedRoles();
+  if (selectedRoles.length > 0) {
+    loadUsersBySelectedRoles();
+  } else {
+    loadUsersForPlants();
+  }
+}
 </script>
 
 <script>
@@ -1188,5 +1233,179 @@ function resetGrid(gridId, message) {
     const selectedLocations = {{ selected_locations|default:"[]"|safe }};
     const selectedSublocations = {{ selected_sublocations|default:"[]"|safe }};
     const selectedUsers = {{ selected_users|default:"[]"|safe }};
+</script>
+<script>
+// Role -> Users preview utilities for Schedule Form
+document.addEventListener('DOMContentLoaded', function () {
+  var roleCheckboxes = document.querySelectorAll('.role-checkbox');
+  roleCheckboxes.forEach(function(checkbox) {
+    checkbox.addEventListener('change', function () {
+      loadUsersBySelectedRoles();
+    });
+  });
+});
+
+function getSelectedRoles() {
+  var roles = [];
+  document.querySelectorAll('.role-checkbox:checked').forEach(function (cb) {
+    roles.push(cb.value);
+  });
+  return roles;
+}
+
+function loadUsersBySelectedRoles() {
+  var selectedRoles = getSelectedRoles();
+  var container = document.getElementById('roleUsersListForm');
+  var grid = document.getElementById('usersGrid');
+  var bar = document.getElementById('userSelectBar');
+
+  var plantIds = getCheckedValues('.plant-checkbox');
+  if (!plantIds.length) {
+    container.innerHTML = '<div class="text-muted small">Select plants first to filter users by role.</div>';
+    resetGrid('usersGrid', 'Please select plants first');
+    if (bar) bar.style.display = 'none';
+    updateUserCount();
+    return;
+  }
+
+  if (!selectedRoles.length) {
+    container.innerHTML = '<div class="text-muted small">Select roles to load users.</div>';
+    resetGrid('usersGrid', 'Please select at least one role');
+    if (bar) bar.style.display = 'none';
+    updateUserCount();
+    return;
+  }
+
+  container.innerHTML = '<div class="text-muted small">Loading users...</div>';
+  grid.innerHTML = '<div class="loading-text">Loading users...</div>';
+
+  fetch('/inspections/ajax/get-users-by-roles/?roles=' + selectedRoles.join(',') + '&plant_ids=' + plantIds.join(','))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var users = data.users || [];
+      renderRoleUsersForm(users);
+
+      // populate the main users grid with returned users grouped by plant
+      grid.innerHTML = '';
+      if (!users.length) {
+        grid.innerHTML = '<div class="loading-text">No users for selected roles in chosen plants</div>';
+        if (bar) bar.style.display = 'none';
+        updateUserCount();
+        return;
+      }
+
+      var grouped = {};
+      users.forEach(function (u) {
+        var key = u.plant_name || 'Other';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(u);
+      });
+
+      Object.keys(grouped).forEach(function (plantName) {
+        grid.appendChild(buildGroupHeader(plantName, 'building'));
+        grouped[plantName].forEach(function (user) {
+          var item = buildCheckboxItem(
+            'selected_users', user.id, 'user_' + user.id,
+            '<strong>' + user.full_name + '</strong>' +
+            ' <small class="text-muted">— ' + user.role +
+            (user.department ? ' | ' + user.department : '') + '</small>',
+            'user-checkbox',
+            function () { updateUserCount(); }
+          );
+
+          // pre-check if present in selectedUsers
+          if (selectedUsers.includes(user.id)) {
+            item.querySelector('input').checked = true;
+          }
+
+          grid.appendChild(item);
+        });
+      });
+
+      if (bar) bar.style.display = 'flex';
+      updateUserCount();
+    })
+    .catch(function () {
+      container.innerHTML = '<div class="text-danger small">Error loading users</div>';
+      grid.innerHTML = '<div class="text-danger small">Error loading users</div>';
+      if (bar) bar.style.display = 'none';
+    });
+}
+
+function renderRoleUsersForm(users) {
+  var container = document.getElementById('roleUsersListForm');
+  container.innerHTML = '';
+
+  if (!users || !users.length) {
+    container.innerHTML = '<div class="text-muted small">No users for selected roles.</div>';
+    return;
+  }
+
+  users.forEach(function (u) {
+    var badge = document.createElement('button');
+    badge.type = 'button';
+    badge.className = 'btn btn-sm btn-outline-secondary mr-1 mb-1 role-user-badge';
+    badge.innerHTML = '<strong>' + escapeHtml(u.full_name) + '</strong>' +
+                      ' <small class="text-muted">— ' + escapeHtml(u.role) + '</small>';
+    badge.dataset.userId = u.id;
+
+    badge.addEventListener('click', function () {
+      toggleUserSelectionFromBadge(u.id, badge);
+    });
+
+    container.appendChild(badge);
+  });
+}
+
+function toggleUserSelectionFromBadge(userId, badgeEl) {
+  var checkbox = document.getElementById('user_' + userId);
+  var generatedId = 'user_hidden_' + userId;
+
+  if (checkbox) {
+    checkbox.checked = !checkbox.checked;
+    // Visual feedback
+    if (checkbox.checked) {
+      badgeEl.classList.remove('btn-outline-secondary');
+      badgeEl.classList.add('btn-primary');
+    } else {
+      badgeEl.classList.remove('btn-primary');
+      badgeEl.classList.add('btn-outline-secondary');
+    }
+    // ensure counts update
+    updateUserCount();
+    // scroll into view
+    checkbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    return;
+  }
+
+  // If checkbox not present (user not in usersGrid), toggle a hidden input so it is submitted
+  var existing = document.getElementById(generatedId);
+  if (existing) {
+    existing.parentNode.removeChild(existing);
+    badgeEl.classList.remove('btn-primary');
+    badgeEl.classList.add('btn-outline-secondary');
+  } else {
+    var hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'selected_users';
+    hidden.id = generatedId;
+    hidden.value = userId;
+    hidden.className = 'user-checkbox';
+    document.getElementById('generatedHiddenUsers').appendChild(hidden);
+    badgeEl.classList.remove('btn-outline-secondary');
+    badgeEl.classList.add('btn-primary');
+  }
+
+  updateUserCount();
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 </script>
 {% endblock %}
