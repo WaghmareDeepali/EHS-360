@@ -7,6 +7,7 @@
 <li class="breadcrumb-item active">No Answers List</li>
 {% endblock %}
 {% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
 .ehs-critical {
     background: #fff6e6;
@@ -283,6 +284,41 @@
 
 .ehs-clear-btn:hover {
     background: #eef2f6;
+}
+.select2-container--default .select2-selection--single {
+    height: 42px !important;
+    border: 1px solid #dbe2ea !important;
+    border-radius: 12px !important;
+    padding: 6px 12px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #334155 !important;
+    line-height: 28px !important;
+    padding-left: 0 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px !important;
+    right: 10px !important;
+}
+
+.select2-dropdown {
+    border: 1px solid #dbe2ea !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0,0,0,.08);
+}
+
+.select2-search__field {
+    border-radius: 8px !important;
+    padding: 6px 10px !important;
+}
+
+.select2-results__option--highlighted {
+    background: #2563eb !important;
 }
 </style>
 {% endblock %}
@@ -717,7 +753,7 @@
                     <label class="form-label fw-bold">
                         Assign To <span class="text-danger">*</span>
                     </label>
-                    <select class="form-select" id="assignToSelect" required>
+                    <select class="form-select select2" id="assignToSelect" required>
                         <option value="">-- Select Responsible Person --</option>
                         {% for user in available_users %}
                         <option value="{{ user.id }}">
@@ -907,9 +943,23 @@
     </div>
 </div>
 
-
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+
+    $('#assignModal').on('shown.bs.modal', function () {
+
+        if ($('#assignToSelect').hasClass("select2-hidden-accessible")) {
+            $('#assignToSelect').select2('destroy');
+        }
+
+        $('#assignToSelect').select2({
+            dropdownParent: $('#assignModal'),
+            placeholder: 'Search user...',
+            width: '100%'
+        });
+    });
 
     // ============================================================
     // ADMIN: Select All + Bulk Assign

@@ -239,7 +239,7 @@
                 {% endif %}
             </td>
 
-            <!-- Assigned To -->
+            {% comment %} <!-- Assigned To -->
             <td>
 
                 {% if hazard.action_items.exists %}
@@ -263,6 +263,56 @@
                                 <i class="fas fa-clock"></i>
                                 {% firstof user.get_full_name user.username %}
                             </span>
+
+                        {% endfor %}
+
+                    {% endfor %}
+
+                {% else %}
+
+                    <span class="text-muted">Not Assigned</span>
+
+                {% endif %}
+
+            </td> {% endcomment %}
+
+            <!-- Assigned To -->
+            <td>
+
+                {% if hazard.action_items.exists %}
+
+                    {% for action_item in hazard.action_items.all %}
+
+                        {% for assigned_user in action_item.get_responsible_users %}
+
+                            {% if assigned_user in action_item.completed_by_users.all %}
+
+                                <!-- User who actually completed -->
+                                <span class="badge badge-success mr-1 mb-1">
+                                    <i class="fas fa-check-circle"></i>
+                                    {% firstof assigned_user.get_full_name assigned_user.username %}
+                                </span>
+
+                            {% elif action_item.status == 'COMPLETED' %}
+
+                                <!-- Other assigned users after item is completed -->
+                                <span class="badge mr-1 mb-1"
+                                    style="background-color:#d4edda;
+                                            color:#155724;
+                                            border:1px solid #28a745;">
+                                    <i class="fas fa-check-circle"></i>
+                                    {% firstof assigned_user.get_full_name assigned_user.username %}
+                                </span>
+
+                            {% else %}
+
+                                <!-- Still pending -->
+                                <span class="badge badge-warning mr-1 mb-1">
+                                    <i class="fas fa-clock"></i>
+                                    {% firstof assigned_user.get_full_name assigned_user.username %}
+                                </span>
+
+                            {% endif %}
 
                         {% endfor %}
 

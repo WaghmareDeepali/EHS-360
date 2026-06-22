@@ -2193,10 +2193,14 @@ class MyActionItemsView(LoginRequiredMixin, ListView):
         # --- USER-SPECIFIC STATISTICS ---
         
         # Items the logged-in user has personally completed
-        my_completed_items = all_my_items.filter(completed_by_users=user)
+        # my_completed_items = all_my_items.filter(completed_by_users=user)
         
         # Items assigned to the user that they have NOT yet completed
-        my_pending_items = all_my_items.exclude(completed_by_users=user)
+        # my_pending_items = all_my_items.exclude(completed_by_users=user)
+
+        my_completed_items = all_my_items.filter(completed_by_users__isnull=False).distinct()
+
+        my_pending_items = all_my_items.filter(completed_by_users__isnull=True)
 
         context['total_assigned'] = all_my_items.count()
         context['completed_count'] = my_completed_items.count()
@@ -2220,11 +2224,13 @@ class MyActionItemsView(LoginRequiredMixin, ListView):
         for item in action_items_on_page:
             # Check if the current user is among those who completed this item.
             # This is efficient because of the prefetch_related in get_queryset.
-            completed_user_ids = {u.id for u in item.completed_by_users.all()}
-            if user.id in completed_user_ids:
-                item.user_has_completed = True
-            else:
-                item.user_has_completed = False
+            # completed_user_ids = {u.id for u in item.completed_by_users.all()}
+            # if user.id in completed_user_ids:
+            #     item.user_has_completed = True
+            # else:
+            #     item.user_has_completed = False
+            # If ANY user completed it, show as completed
+            item.user_has_completed = item.completed_by_users.exists()
         
         # Filter values
         context['selected_status'] = self.request.GET.get('status', '')
