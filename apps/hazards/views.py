@@ -249,6 +249,13 @@ class HazardListView(LoginRequiredMixin, ListView):
         context['selected_assigned_by'] = self.request.GET.get('assigned_by', '')
         context['selected_assigned_to'] = selected_assigned_to
 
+        query_params = self.request.GET.copy()
+
+        if "page" in query_params:
+            query_params.pop("page")
+
+        context["query_params"] = query_params
+
         return context
 class HazardCreateView(LoginRequiredMixin, CreateView):
     model = Hazard

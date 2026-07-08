@@ -1026,7 +1026,7 @@ def schedule_create(request):
                     sublocations = SubLocation.objects.filter(id__in=selected_sublocation_ids)
                     assigned_users = User.objects.filter(
                         id__in=selected_user_ids,
-                        role__name__in=['HOD', 'SAFETY MANAGER'],
+                        role__name__in=['HOD', 'SAFETY MANAGER', 'ADMIN', 'PLANT HEAD'],
                         is_active_employee=True
                     )
 
@@ -2423,14 +2423,35 @@ def handle_response_assignment(request):
         assigned_count = len(response_list)
         
         # Bulk assign using transaction
+        hazard_type = request.POST.get("hazard_type")
+        hazard_category = request.POST.get("hazard_category")
+        severity = request.POST.get("severity")
+        immediate_action = request.POST.get("immediate_action", "")
+        specific_location = request.POST.get("specific_location", "")
+
         from django.db import transaction
+
         with transaction.atomic():
+
             for response in response_list:
                 response.assigned_to = assigned_to
                 response.assigned_by = request.user
                 response.assigned_at = timezone.now()
                 response.assignment_remarks = assignment_remarks
                 response.save()
+
+                hazard = create_hazard_from_response(
+                    response=response,
+                    user=request.user,
+                    hazard_type=hazard_type,
+                    hazard_category=hazard_category,
+                    severity=severity,
+                    immediate_action=immediate_action,
+                    specific_location=specific_location,
+                )
+
+                response.converted_to_hazard = hazard
+                response.save(update_fields=["converted_to_hazard"])
 
         # Send notification (use first response or loop)
         
@@ -2509,6 +2530,129 @@ def no_answers_by_question(request):
 
 
 
+def create_hazard_from_response(
+    response,
+    user,
+    hazard_type,
+    hazard_category,
+    severity,
+    immediate_action,
+    specific_location,
+):
+    from apps.hazards.models import Hazard, HazardPhoto
+
+    schedule = response.submission.schedule
+
+    hazard = Hazard()
+
+    # Reporter
+    hazard.reported_by = user
+    hazard.reporter_name = user.get_full_name()
+    hazard.reporter_email = user.email
+    hazard.reporter_phone = getattr(user, "phone", "") or ""
+
+    hazard.hazard_type = hazard_type or "UC"
+    hazard.hazard_category = hazard_category or "other"
+    hazard.severity = severity or (
+        "high" if response.question.is_critical else "medium"
+    )
+
+    hazard.plant = schedule.plants.first()
+    hazard.zone = schedule.zones.first()
+    hazard.location = schedule.locations.first()
+    hazard.sublocation = schedule.sublocations.first()
+
+    if specific_location:
+        response.specific_location = specific_location
+        response.save(update_fields=["specific_location"])
+
+    category_name = response.question.category.category_name
+
+    hazard.hazard_title = (
+        f"Inspection Non-Compliance: "
+        f"{category_name} - {response.question.question_code}"
+    )
+
+    description_parts = [
+        f"Source: Inspection {schedule.schedule_code}",
+        f"Inspection Date: {schedule.scheduled_date.strftime('%d %B %Y')}",
+        f"Inspector: {response.submission.submitted_by.get_full_name()}",
+        f"Question Code: {response.question.question_code}",
+        f"Question: {response.question.question_text}",
+        f"Category: {category_name}",
+    ]
+
+    if response.specific_location:
+        description_parts.append(
+            f"Specific Location: {response.specific_location}"
+        )
+
+    if response.question.reference_standard:
+        description_parts.append(
+            f"Reference Standard: {response.question.reference_standard}"
+        )
+
+    if response.remarks:
+        description_parts.append(
+            f"Inspector Remarks: {response.remarks}"
+        )
+
+    if response.assignment_remarks:
+        description_parts.append(
+            f"Assignment Notes: {response.assignment_remarks}"
+        )
+
+    hazard.hazard_description = "\n\n".join(description_parts)
+
+    hazard.immediate_action = immediate_action
+
+    hazard.incident_datetime = (
+        response.answered_at
+        or schedule.closed_at
+        or timezone.now()
+    )
+
+    hazard.status = "REPORTED"
+    hazard.approval_status = "PENDING"
+
+    severity_days = {
+        "low": 30,
+        "medium": 15,
+        "high": 7,
+        "critical": 1,
+    }
+
+    hazard.action_deadline = (
+        timezone.now().date()
+        + timezone.timedelta(
+            days=severity_days.get(hazard.severity, 15)
+        )
+    )
+
+    hazard.save()
+
+    if response.photo:
+        HazardPhoto.objects.create(
+            hazard=hazard,
+            photo=response.photo,
+            photo_type="evidence",
+            description=(
+                f"Photo from inspection "
+                f"{schedule.schedule_code} - "
+                f"{response.question.question_code}"
+            ),
+            uploaded_by=user,
+        )
+
+    NotificationService.notify(
+        content_object=hazard,
+        notification_type="HAZARD_REPORTED",
+        module="HAZARD",
+    )
+
+    return hazard
+
+
 @login_required
 def convert_no_answer_to_hazard(request, response_id):
     """
@@ -2557,111 +2701,38 @@ def convert_no_answer_to_hazard(request, response_id):
         messages.error(request, 'This item must be assigned before converting!')
         return redirect('inspections:no_answers_list')
 
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            schedule = response.submission.schedule
 
-            hazard = Hazard()
-
-            # Reporter
-            hazard.reported_by = request.user
-            hazard.reporter_name = request.user.get_full_name()
-            hazard.reporter_email = request.user.email
-            hazard.reporter_phone = getattr(request.user, 'phone', '') or ''
-
-            # Hazard fields from POST
-            hazard.hazard_type = request.POST.get('hazard_type', 'UC')
-            hazard.hazard_category = request.POST.get('hazard_category', 'other')
-            hazard.severity = request.POST.get('severity', 'high' if response.question.is_critical else 'medium')
-
-            # Location from schedule
-            hazard.plant = schedule.plants.first()
-            hazard.zone = schedule.zones.first()
-            hazard.location = schedule.locations.first()
-            hazard.sublocation = schedule.sublocations.first()
-            specific_location = request.POST.get('specific_location', '').strip()
-            if specific_location:
-                response.specific_location = specific_location
-                response.save(update_fields=['specific_location'])
-
-            # Title
-            category_name = response.question.category.category_name
-            hazard.hazard_title = f"Inspection Non-Compliance: {category_name} - {response.question.question_code}"
-
-            # Description
-            description_parts = [
-                f"Source: Inspection {schedule.schedule_code}",
-                f"Inspection Date: {schedule.scheduled_date.strftime('%d %B %Y')}",
-                f"Inspector: {response.submission.submitted_by.get_full_name()}",
-                f"Question Code: {response.question.question_code}",
-                f"Question: {response.question.question_text}",
-                f"Category: {category_name}",
-            ]
-            if response.specific_location:
-                description_parts.append(f"Specific Location: {response.specific_location}")
-            if response.question.reference_standard:
-                description_parts.append(f"Reference Standard: {response.question.reference_standard}")
-            if response.remarks:
-                description_parts.append(f"Inspector Remarks: {response.remarks}")
-            if response.assignment_remarks:
-                description_parts.append(f"Assignment Notes: {response.assignment_remarks}")
-
-            hazard.hazard_description = "\n\n".join(description_parts)
-            hazard.immediate_action = request.POST.get('immediate_action', '')
-
-            # Dates
-            hazard.incident_datetime = response.answered_at or schedule.closed_at or timezone.now()
-            hazard.status = 'REPORTED'
-            hazard.approval_status = 'PENDING'
-
-            # Deadline
-            severity_days = {'low': 30, 'medium': 15, 'high': 7, 'critical': 1}
-            hazard.action_deadline = timezone.now().date() + timezone.timedelta(
-                days=severity_days.get(hazard.severity, 15)
+            hazard = create_hazard_from_response(
+                response=response,
+                user=request.user,
+                hazard_type=request.POST.get("hazard_type"),
+                hazard_category=request.POST.get("hazard_category"),
+                severity=request.POST.get("severity"),
+                immediate_action=request.POST.get("immediate_action", ""),
+                specific_location=request.POST.get("specific_location", "").strip(),
             )
 
-            hazard.save()
-
-            # Copy photo
-            if response.photo:
-                try:
-                    HazardPhoto.objects.create(
-                        hazard=hazard,
-                        photo=response.photo,
-                        photo_type='evidence',
-                        description=f'Photo from inspection {schedule.schedule_code} - {response.question.question_code}',
-                        uploaded_by=request.user
-                    )
-                except Exception as e:
-                    print(f"Photo copy error: {e}")
-
-            # Link response → hazard
             response.converted_to_hazard = hazard
-            response.save(update_fields=['converted_to_hazard'])
+            response.save(update_fields=["converted_to_hazard"])
 
-            # Notification
-            try:
-                NotificationService.notify(
-                    content_object=hazard,
-                    notification_type='HAZARD_REPORTED',
-                    module='HAZARD'
-                )
-            except Exception as e:
-                print(f"Notification error: {e}")
-
-            # Always return JSON — this view is called via AJAX only
             from django.urls import reverse
+
             try:
-                hazard_url = reverse('hazards:hazard_detail', kwargs={'pk': hazard.pk})
+                hazard_url = reverse(
+                    "hazards:hazard_detail",
+                    kwargs={"pk": hazard.pk},
+                )
             except Exception:
                 hazard_url = f"/hazards/{hazard.id}/"
 
             return JsonResponse({
-                'success': True,
-                'hazard_number': hazard.report_number,
-                'hazard_id': hazard.id,
-                'hazard_url': hazard_url,
-                'message': f'Hazard {hazard.report_number} created successfully!'
+                "success": True,
+                "hazard_number": hazard.report_number,
+                "hazard_id": hazard.id,
+                "hazard_url": hazard_url,
+                "message": f"Hazard {hazard.report_number} created successfully!"
             })
 
         except Exception as e:

@@ -131,7 +131,7 @@ def auto_create_inspection_schedules(self):
     )
     from apps.notifications.services import NotificationService
 
-    # now = timezone.now()
+    now = timezone.now()
     # =======================================================
     # for testing perpose
     # !!!! For Testing Run this in Power Shell  !!!!!
@@ -139,11 +139,11 @@ def auto_create_inspection_schedules(self):
     # auto_create_inspection_schedules()
     # =======================================================
     # =====Code=====
-    from datetime import datetime
-    now = timezone.make_aware(
-        datetime(2026, 8, 1, 9, 0, 0)
-        # year - month - date - hours - minutes
-    )
+    # from datetime import datetime
+    # now = timezone.make_aware(
+    #     datetime(2026, 8, 1, 9, 0, 0)
+    #     # year - month - date - hours - minutes
+    # )
     
 
     logger.info(f"[AutoSchedule] Running at {now}")

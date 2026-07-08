@@ -487,6 +487,11 @@
                 <input type="hidden" name="selected_responses" id="selectedResponsesInput">
                 <input type="hidden" name="assigned_to" id="assignedToHidden">
                 <input type="hidden" name="assignment_remarks" id="assignmentRemarksHidden">
+                <input type="hidden" name="hazard_type" id="hazardTypeHidden">
+                <input type="hidden" name="hazard_category" id="hazardCategoryHidden">
+                <input type="hidden" name="severity" id="severityHidden">
+                <input type="hidden" name="immediate_action" id="immediateActionHidden">
+                <input type="hidden" name="specific_location" id="specificLocationHidden">
 
                 <div class="ehs-table-wrapper">
                     <div class="table-responsive">
@@ -737,7 +742,7 @@
 ============================================================ -->
 {% if is_admin %}
 <div class="modal fade" id="assignModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title">
@@ -769,7 +774,91 @@
                     <textarea class="form-control" id="assignRemarksInput" rows="3"
                               placeholder="Add instructions for the assigned person..."></textarea>
                 </div>
+                <form id="convertHazardForm">
+                {% csrf_token %}
+                <input type="hidden" id="convertResponseId" value="">
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">
+                            Hazard Type <span class="text-danger">*</span>
+                        </label>
+                        <select name="hazard_type" id="hazardTypeSelect" class="form-select select2" required>
+                            <option value="">-- Select Type --</option>
+                            <option value="UC" selected>Unsafe Condition</option>
+                            <option value="UA">Unsafe Act</option>
+                            <option value="NM">Near Miss</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">
+                            Hazard Category <span class="text-danger">*</span>
+                        </label>
+                        <select name="hazard_category" id="hazardCategorySelect" class="form-select select2" required>
+                            <option value="">-- Select Category --</option>
+                            <option value="electrical">Electrical</option>
+                            <option value="machine_guarding">Machine Guarding</option>
+                            <option value="height_work">Height work</option>
+                            <option value="fire">Fire</option>
+                            <option value="vehicle_including_forklift">Vehicle including forklift</option>
+                            <option value="ppe_violation">PPE Violation</option>
+                            <option value="asbestos_spillage_bag_torn">Asbestos Spillage/Bag Torn</option>
+                            <option value="hot_work">Hot work</option>
+                            <option value="loto">LOTO</option>
+                            <option value="sop_violations">SOP Violations</option>
+                            <option value="unsafe_storage">Unsafe Storage</option>
+                            <option value="slip_trip">Slip Trip</option>
+                            <option value="noise">Noise</option>
+                            <option value="illumination">Illumination</option>
+                            <option value="dust_collection_ventillation">Dust collection / Ventillation</option>
+                            <option value="legal_compliance">Legal Compliance</option>
+                            <option value="others" selected>Others</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">
+                            Severity <span class="text-danger">*</span>
+                        </label>
+                        <select name="severity" id="severitySelect" class="form-select select2" required>
+                            <option value="">-- Select Severity --</option>
+                            <option value="low">Low — 30 days deadline</option>
+                            <option value="medium">Medium — 15 days deadline</option>
+                            <option value="high">High — 7 days deadline</option>
+                            <option value="critical">Critical — 1 day deadline</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Action Deadline</label>
+                        <div class="alert alert-secondary mb-0 py-2" id="deadlinePreview">
+                            <small>
+                                <i class="fas fa-calendar-alt"></i>
+                                Select severity to see deadline
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Immediate Action Taken / Recommended</label>
+                    <textarea name="immediate_action" id="immediateActionText"
+                                class="form-control" rows="3"
+                                placeholder="Describe any immediate steps taken or recommended..."></textarea>
+                </div>
+                <div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Specific Location 
+                        </label>
+                        <textarea type="text" name="specific_location" id="specificLocationInput" class="form-control" placeholder="Enter exact location (e.g. Line 3, PAnel Area)"></textarea>
+                    </div>
+                </div>    
+            </form>
             </div>
+            <!-- Error message -->
+            <div class="alert alert-danger d-none mt-2" id="convertError"></div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">
                     <i class="fas fa-times"></i> Cancel
@@ -788,7 +877,7 @@
      MODAL 2: Convert to Hazard
      Visible to ALL users — shown when Convert button is clicked
 ============================================================ -->
-<div class="modal fade" id="convertHazardModal" tabindex="-1">
+{% comment %} <div class="modal fade" id="convertHazardModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
@@ -930,7 +1019,7 @@
             </div>
         </div>
     </div>
-</div>
+</div> {% endcomment %}
 
 
 <!-- Success Toast -->
@@ -959,6 +1048,24 @@ document.addEventListener('DOMContentLoaded', function () {
             placeholder: 'Search user...',
             width: '100%'
         });
+        $('#hazardTypeSelect').select2({
+            dropdownParent: $('#assignModal'),
+            placeholder: 'Search user...',
+            width: '100%'
+        });
+
+        $('#hazardCategorySelect').select2({
+            dropdownParent: $('#assignModal'),
+            placeholder: 'Search user...',
+            width: '100%'
+        });
+
+        $('#severitySelect').select2({
+            dropdownParent: $('#assignModal'),
+            placeholder: 'Search user...',
+            width: '100%'
+        });
+
     });
 
     // ============================================================
@@ -1035,6 +1142,23 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('assignmentRemarksHidden').value =
                 document.getElementById('assignRemarksInput').value;
 
+            // Hazard Details
+            document.getElementById('hazardTypeHidden').value =
+                $('#hazardTypeSelect').val();
+
+            document.getElementById('hazardCategoryHidden').value =
+                $('#hazardCategorySelect').val();
+
+            document.getElementById('severityHidden').value =
+                $('#severitySelect').val();
+
+            document.getElementById('immediateActionHidden').value =
+                $('#immediateActionText').val();
+
+            document.getElementById('specificLocationHidden').value =
+                $('#specificLocationInput').val();
+
+            // Submit form
             document.getElementById('assignForm').submit();
         });
     }
